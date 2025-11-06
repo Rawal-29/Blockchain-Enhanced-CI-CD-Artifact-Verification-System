@@ -1,0 +1,19 @@
+backend/
+│
+├── main.py
+├── core/
+│   ├── config.py
+│   ├── database.py
+│   ├── blockchain.py
+│
+├── routes/
+│   ├── hash_routes.py
+│   ├── verify_routes.py
+│   ├── store_routes.py
+│
+├── models/
+│   └── artifact.py
+│
+└── contracts/
+    ├── BlockCICD.sol
+    └── abi.json
