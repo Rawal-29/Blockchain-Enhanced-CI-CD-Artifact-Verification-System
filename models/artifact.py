@@ -1,7 +1,5 @@
-# models/artifact.py
-
 from pydantic import BaseModel
 
 class HashData(BaseModel):
-    # This structure is used to validate the JSON body of the POST request
+    """Pydantic model for validating incoming artifact hash data."""
     hash: str
