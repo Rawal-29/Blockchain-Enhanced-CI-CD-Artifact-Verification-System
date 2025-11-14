@@ -10,7 +10,7 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy all application code
+# Copy all application code and ABI
 COPY . /app
 
 # Expose the port Uvicorn will listen on

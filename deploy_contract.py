@@ -6,7 +6,8 @@ from web3 import Web3, HTTPProvider
 from solcx import compile_source, install_solc
 from dotenv import load_dotenv
 
-# --- CONFIGURATION ---
+# --- CONFIGURATION -
+# --
 load_dotenv(".env.local")
 RPC_URL = os.getenv("ETHEREUM_RPC_URL", "http://127.0.0.1:8545")
 PRIVATE_KEY = os.getenv("DEPLOYER_PRIVATE_KEY")
@@ -63,3 +64,15 @@ contract_address = tx_receipt.contractAddress
 
 print("\n✅ Deployment Successful!")
 print(f"📌 Contract Address: {contract_address}")
+
+# deploy_contract.py (Add this line before the deployment logic)
+
+# --- 4. Deploy Contract ---
+Account = w3.eth.account.from_key(PRIVATE_KEY)
+Contract = w3.eth.contract(abi=abi, bytecode=bytecode)
+
+# ADD THIS: Print the address derived from the key
+print(f"🔑 Deploying from Address: {Account.address}") 
+
+print("🚀 Deploying contract...")
+# ... rest of deployment

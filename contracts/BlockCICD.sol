@@ -1,20 +1,18 @@
-// SPDX-License-Identifier: MIT
-pragma solidity ^0.8.0;
 
 contract BlockCICD {
-    mapping(string => bool) private storedHashes;
+    mapping(bytes32 => bool) private storedHashes; // CHANGED from string to bytes32
     address public owner;
 
     constructor() {
         owner = msg.sender;
     }
 
-    function storeHash(string memory hashValue) public {
+    function storeHash(bytes32 hashValue) public { // CHANGED from string to bytes32
         require(msg.sender == owner, "Unauthorized");
         storedHashes[hashValue] = true;
     }
 
-    function verifyHash(string memory hashValue) public view returns (bool) {
+    function verifyHash(bytes32 hashValue) public view returns (bool) { // CHANGED from string to bytes32
         return storedHashes[hashValue];
     }
 }

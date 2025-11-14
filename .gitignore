@@ -1,3 +1,18 @@
+# ---------------------------------------------------
+# BLOCKCHAIN & APPLICATION SPECIFIC SECRETS
+# ---------------------------------------------------
+.env.local
+.env
+.env.*
+*.log
+
+# ---------------------------------------------------
+# HARDHAT/FOUNDRY/SOLC BUILD ARTIFACTS (if any remain)
+# ---------------------------------------------------
+artifacts/
+.ignition/
+cache/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]

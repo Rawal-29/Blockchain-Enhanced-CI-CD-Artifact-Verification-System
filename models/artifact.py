@@ -1,5 +1,7 @@
+# models/artifact.py
+
 from pydantic import BaseModel
 
-class Artifact(BaseModel):
-    artifact_path: str = None
-    hash: str = None
+class HashData(BaseModel):
+    # This structure is used to validate the JSON body of the POST request
+    hash: str
