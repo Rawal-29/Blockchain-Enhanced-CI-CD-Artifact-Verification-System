@@ -1,14 +1,15 @@
+# main.py
+
 from fastapi import FastAPI
-from routes.hash_routes import router as hash_router
-from routes.store_routes import router as store_router
-from routes.verify_routes import router as verify_router
+from routes import store_routes
+from routes import verify_routes
 
-app = FastAPI(title="BlockCICD Verification API")
+app = FastAPI(title="Blockchain CI/CD Verification System")
 
-app.include_router(hash_router, prefix="/hash", tags=["Hash"])
-app.include_router(store_router, prefix="/store", tags=["Store"])
-app.include_router(verify_router, prefix="/verify", tags=["Verify"])
+# Register the API routers
+app.include_router(store_routes.router) 
+app.include_router(verify_routes.router)
 
-@app.get("/")
-def root():
-    return {"message": "BlockCICD API Running"}
+@app.get("/", include_in_schema=False)
+def read_root():
+    return {"message": "Blockchain Verification API is running."}
