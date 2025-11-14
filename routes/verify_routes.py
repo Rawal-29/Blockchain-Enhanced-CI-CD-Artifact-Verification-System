@@ -1,12 +1,11 @@
 from fastapi import APIRouter
-# Fix: Only import the function you actually use in this file
-from core.blockchain import verify_artifact_hash 
+from core.blockchain import verify_artifact_hash
 
 router = APIRouter()
 
-@router.get("/api/verify/artifact")
+@router.get("/api/verify/artifact", tags=["Verification"])
 def verify_artifact(hash: str):
-    """CD Pipeline: Verifies artifact hash against the immutable blockchain record."""
+    """Handles CD pipeline verification: checks artifact hash against the immutable record."""
     try:
         is_verified = verify_artifact_hash(hash)
         
@@ -17,7 +16,6 @@ def verify_artifact(hash: str):
                 "message": "Artifact hash found on blockchain."
             }
         else:
-            # CRITICAL: This failure blocks deployment of tampered code
             return {
                 "status": "unverified",
                 "is_verified": False,
