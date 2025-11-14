@@ -14,3 +14,4 @@ verification_table = Table(
 
 metadata.create_all(engine)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
