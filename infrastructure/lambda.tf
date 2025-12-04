@@ -11,7 +11,7 @@ resource "aws_lambda_function" "api" {
 
   environment {
     variables = {
-        # We use placeholders. The real values are injected via GitHub Actions/AWS Console
+        
         ETHEREUM_RPC_URL     = "placeholder"
         CONTRACT_ADDRESS     = "placeholder"
         DEPLOYER_PRIVATE_KEY = "placeholder"
