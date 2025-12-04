@@ -3,9 +3,9 @@ terraform {
     aws = { source = "hashicorp/aws", version = "~> 5.0" }
   }
   backend "s3" {
-    bucket  = "blockchain-api-tf-state-rawal" # <--- REPLACE WITH YOUR BUCKET NAME
+    bucket  = "blockchain-state-rawal29-2025" 
     key     = "prod/terraform.tfstate"
-    region  = "us-east-1"
+    region  = "us-east-2"
   }
 }
-provider "aws" { region = "us-east-1" }
+provider "aws" { region = "us-east-2" }

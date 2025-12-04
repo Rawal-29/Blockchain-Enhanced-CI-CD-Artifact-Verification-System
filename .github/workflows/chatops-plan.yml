@@ -1,0 +1,60 @@
+name: ChatOps - Terraform Plan
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  id-token: write
+  contents: read
+  pull-requests: write
+
+jobs:
+  plan:
+    # Run only if comment contains /tfplan
+    if: github.event.issue.pull_request && contains(github.event.comment.body, '/tfplan')
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./infrastructure
+
+    steps:
+      - name: Get PR Branch
+        uses: xt0rted/pull-request-comment-branch@v2
+        id: comment-branch
+
+      - name: Checkout PR Code
+        uses: actions/checkout@v3
+        with:
+          ref: ${{ steps.comment-branch.outputs.head_ref }}
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v3
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: us-east-2
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+
+      - name: Terraform Init
+        run: terraform init
+
+      - name: Terraform Plan
+        id: plan
+        run: terraform plan -no-color > plan.txt
+        continue-on-error: true
+
+      - name: Post Plan to Comment
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const fs = require('fs');
+            const plan = fs.readFileSync('infrastructure/plan.txt', 'utf8');
+            const output = `#### Terraform Plan 📖\n\`\`\`text\n${plan.substring(0, 65000)}\n\`\`\``;
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: output
+            })
