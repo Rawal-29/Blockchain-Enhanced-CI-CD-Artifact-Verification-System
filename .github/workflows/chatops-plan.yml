@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   plan:
-    # Run only if comment contains /tfplan
+    # Only run if comment is on a PR and contains /tfplan
     if: github.event.issue.pull_request && contains(github.event.comment.body, '/tfplan')
     runs-on: ubuntu-latest
     defaults:
@@ -31,7 +31,7 @@ jobs:
         uses: aws-actions/configure-aws-credentials@v3
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          aws-region: us-east-2
+          aws-region: us-east-2 
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v2
@@ -39,10 +39,29 @@ jobs:
       - name: Terraform Init
         run: terraform init
 
-      - name: Terraform Plan
-        id: plan
-        run: terraform plan -no-color > plan.txt
-        continue-on-error: true
+      # 1. Create Binary Plan (Needed for hashing)
+      - name: Terraform Plan (Save Binary)
+        run: terraform plan -out=tfplan.binary
+
+      # 2. Install Web3 for Python script
+      - name: Install Dependencies
+        run: pip install web3
+
+      # 3. Register Hash to Blockchain
+      - name: 🔒 Blockchain Register
+        env:
+          ETHEREUM_RPC_URL: ${{ secrets.ETHEREUM_RPC_URL }}
+          DEPLOYER_PRIVATE_KEY: ${{ secrets.DEPLOYER_PRIVATE_KEY }}
+          CONTRACT_ADDRESS: ${{ secrets.CONTRACT_ADDRESS }}
+        run: python3 ../scripts/tf_guard.py register tfplan.binary
+
+      # 4. Upload to S3 (Use SHA to make it unique per commit)
+      - name: Upload Plan to S3
+        run: aws s3 cp tfplan.binary s3://blockchain-state-rawal29-2025/plans/${{ github.sha }}.tfplan
+
+      # 5. Generate Text Output for Comment
+      - name: Convert to Text
+        run: terraform show -no-color tfplan.binary > plan.txt
 
       - name: Post Plan to Comment
         uses: actions/github-script@v6
@@ -56,5 +75,5 @@ jobs:
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: output
+              body: output + "\n\n✅ **Plan Secured:** Hashed & Anchored to Blockchain."
             })

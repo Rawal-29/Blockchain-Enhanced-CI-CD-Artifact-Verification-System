@@ -32,5 +32,23 @@ jobs:
     - name: Terraform Init
       run: terraform init
 
+
+    - name: Download Pending Plan
+      run: aws s3 cp s3://blockchain-state-rawal29-2025/plans/${{ github.sha }}.tfplan tfplan.binary
+
+
+    - name: Install Dependencies
+      run: pip install web3
+
+    # 3. Verify Hash against Blockchain
+    - name: 🔍 Blockchain Verify
+      env:
+        ETHEREUM_RPC_URL: ${{ secrets.ETHEREUM_RPC_URL }}
+        DEPLOYER_PRIVATE_KEY: ${{ secrets.DEPLOYER_PRIVATE_KEY }}
+        CONTRACT_ADDRESS: ${{ secrets.CONTRACT_ADDRESS }}
+      run: python3 ../scripts/tf_guard.py verify tfplan.binary
+
+
     - name: Terraform Apply
-      run: terraform apply -auto-approve
+      # Apply the file we just verified
+      run: terraform apply -auto-approve tfplan.binary
