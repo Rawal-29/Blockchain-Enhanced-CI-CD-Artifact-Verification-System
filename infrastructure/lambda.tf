@@ -49,3 +49,17 @@ resource "aws_ecr_repository_policy" "lambda_pull" {
     ]
   })
 }
+# 1. Create the URL
+resource "aws_lambda_function_url" "api_url" {
+  function_name      = aws_lambda_function.api.function_name
+  authorization_type = "NONE"
+}
+
+# 2. Allow Public Access (Important!)
+resource "aws_lambda_permission" "allow_public_url" {
+  statement_id  = "AllowPublicFunctionUrlInvoke"
+  action        = "lambda:InvokeFunctionUrl"
+  function_name = aws_lambda_function.api.function_name
+  principal     = "*"
+  function_url_auth_type = "NONE"
+}
