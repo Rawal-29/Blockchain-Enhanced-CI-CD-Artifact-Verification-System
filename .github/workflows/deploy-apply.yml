@@ -58,7 +58,7 @@ jobs:
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v2
         with:
-          # [CRITICAL FIX 1] Disable the wrapper so outputs are clean strings
+          # We keep this off, but we use a stronger fix below just in case
           terraform_wrapper: false
 
       - name: Terraform Init
@@ -89,15 +89,15 @@ jobs:
         id: get_bucket
         working-directory: ${{ env.TF_WORKING_DIR }}
         run: |
-          # 1. Get raw output
-          RAW=$(terraform output -raw artifact_bucket_name)
+          # 1. Get ALL output (including the noise/debug text)
+          RAW_OUTPUT=$(terraform output -raw artifact_bucket_name)
           
-          # [CRITICAL FIX 2] Force clean the string just in case wrapper failed to disable
-          # This removes '::debug::Terraform exited...' and any trailing newlines
-          CLEAN_BUCKET=$(echo "$RAW" | sed 's/::debug::.*//' | tr -d '\n' | tr -d '\r')
+          # 2. Extract ONLY the bucket name pattern
+          # This looks for 'blockchain-artifacts-' followed by any numbers
+          CLEAN_BUCKET=$(echo "$RAW_OUTPUT" | grep -o 'blockchain-artifacts-[0-9]*' | head -n 1)
           
           echo "BUCKET_NAME=$CLEAN_BUCKET" >> $GITHUB_ENV
-          echo "✅ Found Bucket: '$CLEAN_BUCKET'"
+          echo "✅ Found Bucket: $CLEAN_BUCKET"
 
       - name: Upload ABI
         run: |
