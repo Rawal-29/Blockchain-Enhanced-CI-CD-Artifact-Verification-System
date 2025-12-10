@@ -1,25 +1,38 @@
 import os
 import json
+import sys
 from web3 import Web3, HTTPProvider
-from solcx import compile_source, install_solc
+from solcx import compile_source, install_solc, set_solc_version
 from dotenv import load_dotenv
 
 load_dotenv(".env.local")
 
-# 1. Install Solc (Compiler)
+# --- FIX: Explicitly Install Solc ---
+print("🔧 Installing Solidity Compiler (0.8.0)...")
 try:
+    # We force the installation of 0.8.0
     install_solc("0.8.0")
-except Exception:
-    pass
+    # We explicitly set this as the active version
+    set_solc_version("0.8.0")
+    print("✅ Solc 0.8.0 installed and active.")
+except Exception as e:
+    print(f"❌ Failed to install Solc: {e}")
+    sys.exit(1)
 
 # 2. Compile Contract
+print("Compiling BlockCICD.sol...")
 with open("contracts/BlockCICD.sol", "r") as f:
     contract_source_code = f.read()
 
-compiled_sol = compile_source(
-    contract_source_code,
-    output_values=["abi", "bin"]
-)
+try:
+    compiled_sol = compile_source(
+        contract_source_code,
+        output_values=["abi", "bin"],
+        solc_version="0.8.0" # Explicitly use the version we just installed
+    )
+except Exception as e:
+    print(f"❌ Compilation Failed: {e}")
+    sys.exit(1)
 
 contract_interface = compiled_sol.popitem()[1]
 abi = contract_interface["abi"]
@@ -37,19 +50,21 @@ if RPC_URL and PRIVATE_KEY:
     try:
         w3 = Web3(HTTPProvider(RPC_URL))
         if w3.is_connected():
-            Account = w3.eth.account.from_key(PRIVATE_KEY)
+            account = w3.eth.account.from_key(PRIVATE_KEY)
             Contract = w3.eth.contract(abi=abi, bytecode=contract_interface["bin"])
             
-            print(f"🚀 Deploying from {Account.address}...")
-            # Simple check to stop if no funds (prevents hard crash script)
-            if w3.eth.get_balance(Account.address) == 0:
+            print(f"🚀 Deploying from {account.address}...")
+            
+            # Simple check to stop if no funds (prevents hard crash)
+            balance = w3.eth.get_balance(account.address)
+            if balance == 0:
                  print("⚠️  Insufficient funds. Skipping deployment, but ABI is saved.")
-                 exit(0)
+                 sys.exit(0)
 
             deploy_txn = Contract.constructor().build_transaction({
                 'chainId': w3.eth.chain_id,
-                'from': Account.address,
-                'nonce': w3.eth.get_transaction_count(Account.address),
+                'from': account.address,
+                'nonce': w3.eth.get_transaction_count(account.address),
                 'gasPrice': w3.eth.gas_price
             })
             
@@ -62,4 +77,7 @@ if RPC_URL and PRIVATE_KEY:
             print(f"📌 Contract Address: {tx_receipt.contractAddress}")
     except Exception as e:
         print(f"⚠️  Deployment skipped/failed: {e}")
+        # We don't exit(1) here because saving the ABI is the most critical part for the pipeline
         print("✅ ABI was saved successfully. You can proceed with Infrastructure.")
+else:
+    print("⚠️  Missing RPC_URL or PRIVATE_KEY. Skipping deployment.")
