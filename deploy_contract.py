@@ -2,32 +2,31 @@ import os
 import json
 import sys
 from web3 import Web3, HTTPProvider
-# Import 'import_installed_solc' to use the binary we downloaded in CI
-from solcx import compile_source, install_solc, set_solc_version, import_installed_solc
+from solcx import compile_source, install_solc, set_solc_version
 from dotenv import load_dotenv
 
 load_dotenv(".env.local")
 
-# --- FIXED: Robust Installation Logic ---
-print("🔧 Setting up Solidity Compiler (0.8.0)...")
+# --- FIXED: Direct Binary Path Logic ---
+# We verify if the manual binary exists (from GitHub Actions)
+CI_SOLC_PATH = "/usr/local/bin/solc"
 
-try:
-    # 1. First, try to "import" the binary we installed via GitHub Actions
-    # This tells python: "Hey, use the 'solc' at /usr/local/bin/solc"
+compile_args = {}
+
+if os.path.exists(CI_SOLC_PATH):
+    print(f"✅ Found manual CI solc at {CI_SOLC_PATH}")
+    # valid for py-solc-x: pass the executable path directly
+    compile_args["solc_binary"] = CI_SOLC_PATH
+else:
+    print("⚠️ Manual binary not found. Attempting standard install (Local Dev)...")
     try:
-        import_installed_solc("/usr/local/bin/solc")
-        set_solc_version("0.8.0")
-        print("✅ Using system-installed Solc 0.8.0")
-    except Exception:
-        # Fallback for local development (Mac/Windows)
-        print("⚠️ System solc not found (Normal on local). Checking standard install...")
         install_solc("0.8.0")
         set_solc_version("0.8.0")
-        print("✅ Using standard Solc 0.8.0")
-    
-except Exception as e:
-    print(f"❌ Critical Error: Could not setup Solc: {e}")
-    sys.exit(1)
+        compile_args["solc_version"] = "0.8.0"
+        print("✅ Standard Solc 0.8.0 installed.")
+    except Exception as e:
+        print(f"❌ Critical Error: Could not setup Solc: {e}")
+        sys.exit(1)
 
 # 2. Compile Contract
 print("Compiling BlockCICD.sol...")
@@ -35,10 +34,11 @@ try:
     with open("contracts/BlockCICD.sol", "r") as f:
         contract_source_code = f.read()
 
+    # We unpack **compile_args to pass either 'solc_binary' OR 'solc_version'
     compiled_sol = compile_source(
         contract_source_code,
         output_values=["abi", "bin"],
-        solc_version="0.8.0"
+        **compile_args 
     )
 except Exception as e:
     print(f"❌ Compilation Failed: {e}")
@@ -87,7 +87,7 @@ if RPC_URL and PRIVATE_KEY:
             contract_address = tx_receipt.contractAddress
             print(f"📌 Contract Address: {contract_address}")
 
-            # --- NEW: Generate Terraform Variables File ---
+            # --- Generate Terraform Variables File ---
             tfvars_content = f'contract_address = "{contract_address}"\n'
             
             # Write to infrastructure/terraform.auto.tfvars
