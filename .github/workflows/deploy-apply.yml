@@ -32,7 +32,7 @@ jobs:
       - name: Install Dependencies
         run: pip install web3 py-solc-x python-dotenv
 
-      # [FIX] Manually install Solc to avoid 403 Forbidden errors
+      # Manually install Solc to avoid 403 Forbidden errors
       - name: Install Solc 0.8.0 (Manual)
         run: |
           wget https://github.com/ethereum/solidity/releases/download/v0.8.0/solc-static-linux -O solc
@@ -58,7 +58,7 @@ jobs:
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v2
         with:
-          # [CRITICAL FIX] Disabling wrapper prevents "::debug::" noise in outputs
+          # [CRITICAL FIX 1] Disable the wrapper so outputs are clean strings
           terraform_wrapper: false
 
       - name: Terraform Init
@@ -91,11 +91,13 @@ jobs:
         run: |
           # 1. Get raw output
           RAW=$(terraform output -raw artifact_bucket_name)
-          # 2. Clean it (Strip any '::' debug text if wrapper was on)
-          CLEAN_BUCKET=$(echo "$RAW" | awk -F'::' '{print $1}')
+          
+          # [CRITICAL FIX 2] Force clean the string just in case wrapper failed to disable
+          # This removes '::debug::Terraform exited...' and any trailing newlines
+          CLEAN_BUCKET=$(echo "$RAW" | sed 's/::debug::.*//' | tr -d '\n' | tr -d '\r')
           
           echo "BUCKET_NAME=$CLEAN_BUCKET" >> $GITHUB_ENV
-          echo "✅ Found Bucket: $CLEAN_BUCKET"
+          echo "✅ Found Bucket: '$CLEAN_BUCKET'"
 
       - name: Upload ABI
         run: |
