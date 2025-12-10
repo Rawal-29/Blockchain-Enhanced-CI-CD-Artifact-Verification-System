@@ -1,1 +1,1 @@
-image_tag = "latest"
+image_tag = "845f8cec4006158f3868324a0232026c1b311708"
