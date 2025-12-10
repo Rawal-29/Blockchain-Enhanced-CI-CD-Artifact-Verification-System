@@ -9,9 +9,9 @@ contract BlockCICD is ERC20, Ownable {
 
     event PlanVerified(bytes32 indexed planHash, address indexed auditor, uint256 timestamp);
 
-    // [FIXED] Removed "Ownable(msg.sender)" because older OpenZeppelin versions handle this automatically
+
     constructor() ERC20("DevOps Trust Token", "DTT") {
-        // Implicitly initializes Ownable with msg.sender
+
     }
 
     function storeHash(bytes32 hashValue) public onlyOwner {
