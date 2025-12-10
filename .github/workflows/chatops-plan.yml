@@ -1,105 +1,44 @@
-name: "ChatOps - Terraform Plan"
-
+name: "ChatOps Plan"
 on:
-  issue_comment:
-    types: [created]
-
+  issue_comment: { types: [created] }
 env:
   AWS_REGION: "us-east-2"
   TF_STATE_BUCKET: "blockchain-state-rawal29-2025"
   TF_WORKING_DIR: "./infrastructure"
-
 permissions:
   id-token: write
   contents: read
   pull-requests: write
-
 jobs:
-  terraform-plan:
-    name: "Plan & Upload"
-    # Run only if it's a PR and the comment contains '/tfplan'
+  plan:
     if: github.event.issue.pull_request && contains(github.event.comment.body, '/tfplan')
     runs-on: ubuntu-latest
-
     steps:
-      # 1. Checkout the specific PR branch
-      - name: Get PR Branch
-        uses: xt0rted/pull-request-comment-branch@v2
-        id: comment-branch
-
-      - name: Checkout Code
-        uses: actions/checkout@v3
-        with:
-          ref: ${{ steps.comment-branch.outputs.head_ref }}
-
-      # 2. Configure AWS
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v3
+      - uses: xt0rted/pull-request-comment-branch@v2
+        id: branch
+      - uses: actions/checkout@v3
+        with: { ref: ${{ steps.branch.outputs.head_ref }} }
+      - uses: aws-actions/configure-aws-credentials@v3
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
-
-      # 3. Setup Terraform
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v2
-
-      - name: Terraform Init
-        working-directory: ${{ env.TF_WORKING_DIR }}
+      - uses: hashicorp/setup-terraform@v2
+        with: { terraform_wrapper: false }
+      - working-directory: ${{ env.TF_WORKING_DIR }}
         run: terraform init
-
-      # 4. Generate Binary Plan (For Apply)
-      - name: Terraform Plan (Binary)
-        id: plan
-        working-directory: ${{ env.TF_WORKING_DIR }}
+      - working-directory: ${{ env.TF_WORKING_DIR }}
         run: terraform plan -out=tfplan.binary
-
-      # 5. Upload Binary Plan to S3 (Secure Storage)
-      - name: Upload Plan to Backend S3
-        run: |
-          aws s3 cp ${{ env.TF_WORKING_DIR }}/tfplan.binary s3://${{ env.TF_STATE_BUCKET }}/plans/${{ steps.comment-branch.outputs.head_sha }}.tfplan
-
-      # 6. Generate Readable Plan (For Comment)
-      - name: Convert Plan to Text
-        working-directory: ${{ env.TF_WORKING_DIR }}
+      - run: aws s3 cp ${{ env.TF_WORKING_DIR }}/tfplan.binary s3://${{ env.TF_STATE_BUCKET }}/plans/${{ steps.branch.outputs.head_sha }}.tfplan
+      - working-directory: ${{ env.TF_WORKING_DIR }}
         run: terraform show -no-color tfplan.binary > plan.txt
-
-      # 7. Post Plan to PR Comment
-      - name: Post Plan to GitHub
-        uses: actions/github-script@v6
+      - uses: actions/github-script@v6
         with:
           script: |
             const fs = require('fs');
-            const path = require('path');
-            
-            // Read the text plan
-            const planPath = path.join(process.env.TF_WORKING_DIR, 'plan.txt');
-            // Read file, handling potential size limits if necessary (simplified here)
-            const plan = fs.readFileSync(planPath, 'utf8');
-
-            // 1. Create a short summary
-            const outcome = '${{ steps.plan.outcome }}';
-            const emoji = outcome === 'success' ? '✅' : '❌';
-
-            // 2. Format the comment
-            const output = `### ${emoji} Terraform Plan Generated!
-            
-            **Plan stored in S3:** \`s3://${process.env.TF_STATE_BUCKET}/plans/${{ steps.comment-branch.outputs.head_sha }}.tfplan\`
-            
-            <details><summary>Show Plan Details</summary>
-            
-            \`\`\`hcl
-            ${plan.slice(0, 65000)} 
-            \`\`\`
-            
-            </details>
-            
-            *Pusher: @${{ github.actor }}, Action: \`${{ github.event_name }}\`*`;
-            // Note: .slice(0, 65000) prevents error if plan is too big for GitHub comment API
-
-            // 3. Post the comment
+            const plan = fs.readFileSync('${{ env.TF_WORKING_DIR }}/plan.txt', 'utf8');
             github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: output
+              body: `### ✅ Plan Generated\n<details><summary>Details</summary>\n\`\`\`\n${plan.slice(0,65000)}\n\`\`\`\n</details>`
             })

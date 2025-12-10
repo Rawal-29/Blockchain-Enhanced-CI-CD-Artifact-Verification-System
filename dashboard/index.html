@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Auditor Dashboard</title>
+<style>body{font-family:sans-serif;padding:40px;background:#f4f6f8}.card{background:#fff;padding:24px;margin-bottom:20px;border-radius:12px;box-shadow:0 4px 6px rgba(0,0,0,0.05)}table{width:100%;border-collapse:collapse}td,th{padding:12px;border-bottom:1px solid #eee;text-align:left}.badge{background:#e6fffa;color:#047857;padding:4px 8px;border-radius:4px;font-weight:bold}</style>
+<script src="https://cdn.ethers.io/lib/ethers-5.2.umd.min.js"></script>
+</head>
+<body>
+<h1>Immutable Audit Log</h1>
+<div class="card"><h3>Status</h3><p>Contract: <span id="addr">...</span></p><p>Rewards: <span id="supply">0 DTT</span></p></div>
+<div class="card"><h3>Log</h3><table id="tbl"><thead><tr><th>Time</th><th>Hash</th><th>Status</th></tr></thead><tbody></tbody></table></div>
+<script>
+const ADDR="REPLACE_ME_WITH_REAL_ADDRESS";
+const ABI=["function totalSupply() view returns (uint256)","event PlanVerified(bytes32 indexed planHash, address indexed auditor, uint256 timestamp)"];
+(async()=>{
+if(!ADDR.startsWith("0x"))return;
+const p=new ethers.providers.JsonRpcProvider("https://rpc.sepolia.org"),c=new ethers.Contract(ADDR,ABI,p);
+document.getElementById("addr").innerText=ADDR;
+try{
+document.getElementById("supply").innerText=ethers.utils.formatEther(await c.totalSupply())+" DTT";
+const e=await c.queryFilter(c.filters.PlanVerified(),-10000);
+e.reverse().forEach(v=>{const r=document.querySelector("#tbl tbody").insertRow();r.innerHTML=`<td>${new Date(v.args.timestamp*1000).toLocaleString()}</td><td>${v.args.planHash.substring(0,16)}...</td><td><span class="badge">VERIFIED</span></td>`})
+}catch(e){}
+})();
+</script></body></html>

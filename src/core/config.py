@@ -1,0 +1,4 @@
+import os
+RPC_URL = os.getenv("ETHEREUM_RPC_URL")
+CONTRACT_ADDRESS = os.getenv("CONTRACT_ADDRESS")
+PRIVATE_KEY = os.getenv("DEPLOYER_PRIVATE_KEY")
