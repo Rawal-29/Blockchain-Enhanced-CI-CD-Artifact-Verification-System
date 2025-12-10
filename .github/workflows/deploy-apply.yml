@@ -80,15 +80,12 @@ jobs:
             terraform apply -auto-approve tfplan.binary
           fi
 
-      # --- STEP 3: UPLOAD ABI TO SECURE BUCKET ---
+     # --- STEP 3: UPLOAD ABI TO SECURE BUCKET ---
       - name: Get Bucket Name
         id: get_bucket
         working-directory: ${{ env.TF_WORKING_DIR }}
         run: |
-          # Extract bucket name from output
-          echo "BUCKET_NAME=$(terraform output -raw artifact_bucket_name)" >> $GITHUB_ENV
-
-      - name: Upload ABI
-        run: |
-          echo "Uploading ABI to: ${{ env.BUCKET_NAME }}"
-          aws s3 cp BlockCICD_ABI.json s3://${{ env.BUCKET_NAME }}/contracts/BlockCICD_ABI.json
+          # Use -raw to get the value, and capture strictly the last line of output to avoid noise
+          BUCKET_VAL=$(terraform output -raw artifact_bucket_name | tail -n 1)
+          echo "BUCKET_NAME=$BUCKET_VAL" >> $GITHUB_ENV
+          echo "✅ Found Bucket: $BUCKET_VAL"
