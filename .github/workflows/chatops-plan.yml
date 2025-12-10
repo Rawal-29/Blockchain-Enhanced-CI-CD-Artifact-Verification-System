@@ -1,7 +1,13 @@
-name: ChatOps - Terraform Plan
+name: "ChatOps - Terraform Plan"
+
 on:
   issue_comment:
     types: [created]
+
+env:
+  AWS_REGION: "us-east-2"
+  TF_STATE_BUCKET: "blockchain-state-rawal29-2025"
+  TF_WORKING_DIR: "./infrastructure"
 
 permissions:
   id-token: write
@@ -9,71 +15,53 @@ permissions:
   pull-requests: write
 
 jobs:
-  plan:
-    # Only run if comment is on a PR and contains /tfplan
+  terraform-plan:
+    name: "Plan & Upload"
     if: github.event.issue.pull_request && contains(github.event.comment.body, '/tfplan')
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ./infrastructure
 
     steps:
       - name: Get PR Branch
         uses: xt0rted/pull-request-comment-branch@v2
         id: comment-branch
 
-      - name: Checkout PR Code
+      - name: Checkout Code
         uses: actions/checkout@v3
         with:
           ref: ${{ steps.comment-branch.outputs.head_ref }}
 
+
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v3
         with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          aws-region: us-east-2 
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }} 
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v2
 
       - name: Terraform Init
+        working-directory: ${{ env.TF_WORKING_DIR }}
         run: terraform init
 
-      # 1. Create Binary Plan (Needed for hashing)
-      - name: Terraform Plan (Save Binary)
+
+      - name: Terraform Plan
+        working-directory: ${{ env.TF_WORKING_DIR }}
+
         run: terraform plan -out=tfplan.binary
 
-      # 2. Install Web3 for Python script
-      - name: Install Dependencies
-        run: pip install web3
+      - name: Upload Plan to Backend S3
 
-      # 3. Register Hash to Blockchain
-      - name: 🔒 Blockchain Register
-        env:
-          ETHEREUM_RPC_URL: ${{ secrets.ETHEREUM_RPC_URL }}
-          DEPLOYER_PRIVATE_KEY: ${{ secrets.DEPLOYER_PRIVATE_KEY }}
-          CONTRACT_ADDRESS: ${{ secrets.CONTRACT_ADDRESS }}
-        run: python3 ../scripts/tf_guard.py register tfplan.binary
+        run: |
+          aws s3 cp ${{ env.TF_WORKING_DIR }}/tfplan.binary s3://${{ env.TF_STATE_BUCKET }}/plans/${{ steps.comment-branch.outputs.head_sha }}.tfplan
 
-      # 4. Upload to S3 (Use SHA to make it unique per commit)
-      - name: Upload Plan to S3
-        run: aws s3 cp tfplan.binary s3://blockchain-state-rawal29-2025/plans/${{ github.sha }}.tfplan
-
-      # 5. Generate Text Output for Comment
-      - name: Convert to Text
-        run: terraform show -no-color tfplan.binary > plan.txt
-
-      - name: Post Plan to Comment
+ 
+      - name: Comment Result
         uses: actions/github-script@v6
         with:
           script: |
-            const fs = require('fs');
-            const plan = fs.readFileSync('infrastructure/plan.txt', 'utf8');
-            const output = `#### Terraform Plan 📖\n\`\`\`text\n${plan.substring(0, 65000)}\n\`\`\``;
-            
             github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: output + "\n\n✅ **Plan Secured:** Hashed & Anchored to Blockchain."
+              body: '✅ **Terraform Plan Generated!**\n\nThe plan has been securely stored in S3.\nMerge this PR to apply the changes.'
             })

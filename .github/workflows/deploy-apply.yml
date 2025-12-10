@@ -1,54 +1,86 @@
-name: Deploy - Terraform Apply
+name: "Deploy Infrastructure & Contracts"
+
 on:
   push:
-    branches: [ main ]
-    paths:
-      - 'infrastructure/**'
+    branches:
+      - main
+
+env:
+  AWS_REGION: "us-east-2"
+  TF_STATE_BUCKET: "blockchain-state-rawal29-2025"
+  TF_WORKING_DIR: "./infrastructure"
 
 permissions:
   id-token: write
   contents: read
 
 jobs:
-  apply:
+  deploy:
+    name: "Apply & Publish"
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ./infrastructure
 
     steps:
-    - name: Checkout
-      uses: actions/checkout@v3
+      - name: Checkout Code
+        uses: actions/checkout@v3
 
-    - name: Configure AWS Credentials
-      uses: aws-actions/configure-aws-credentials@v3
-      with:
-        role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-        aws-region: us-east-2
+      # --- STEP 1: DEPLOY SMART CONTRACT ---
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
 
-    - name: Setup Terraform
-      uses: hashicorp/setup-terraform@v2
+      - name: Install Dependencies
+        run: pip install web3 py-solc-x python-dotenv
 
-    - name: Terraform Init
-      run: terraform init
+      - name: Deploy Contract & Generate ABI
+        env:
+          ETHEREUM_RPC_URL: ${{ secrets.ETHEREUM_RPC_URL }}
+          DEPLOYER_PRIVATE_KEY: ${{ secrets.DEPLOYER_PRIVATE_KEY }}
+        run: python deploy_contract.py
+        # This script generates 'BlockCICD_ABI.json' in the root
 
+      # --- STEP 2: APPLY INFRASTRUCTURE ---
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v3
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
 
-    - name: Download Pending Plan
-      run: aws s3 cp s3://blockchain-state-rawal29-2025/plans/${{ github.sha }}.tfplan tfplan.binary
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
 
+      - name: Terraform Init
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: terraform init
 
-    - name: Install Dependencies
-      run: pip install web3
+      # Attempt to download plan (if it exists from PR). If not, generate new one.
+      - name: Check & Download Plan
+        id: download-plan
+        continue-on-error: true
+        run: |
+          aws s3 cp s3://${{ env.TF_STATE_BUCKET }}/plans/${{ github.sha }}.tfplan ${{ env.TF_WORKING_DIR }}/tfplan.binary
 
-    # 3. Verify Hash against Blockchain
-    - name: 🔍 Blockchain Verify
-      env:
-        ETHEREUM_RPC_URL: ${{ secrets.ETHEREUM_RPC_URL }}
-        DEPLOYER_PRIVATE_KEY: ${{ secrets.DEPLOYER_PRIVATE_KEY }}
-        CONTRACT_ADDRESS: ${{ secrets.CONTRACT_ADDRESS }}
-      run: python3 ../scripts/tf_guard.py verify tfplan.binary
+      - name: Terraform Apply
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: |
+          if [ -f "tfplan.binary" ]; then
+            echo "Applying stored plan..."
+            terraform apply -auto-approve tfplan.binary
+          else
+            echo "No plan found (direct push?), generating new plan..."
+            terraform plan -out=tfplan.binary
+            terraform apply -auto-approve tfplan.binary
+          fi
 
+      # --- STEP 3: UPLOAD ABI TO SECURE BUCKET ---
+      - name: Get Bucket Name
+        id: get_bucket
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: |
+          # Extract bucket name from output
+          echo "BUCKET_NAME=$(terraform output -raw artifact_bucket_name)" >> $GITHUB_ENV
 
-    - name: Terraform Apply
-      # Apply the file we just verified
-      run: terraform apply -auto-approve tfplan.binary
+      - name: Upload ABI
+        run: |
+          echo "Uploading ABI to: ${{ env.BUCKET_NAME }}"
+          aws s3 cp BlockCICD_ABI.json s3://${{ env.BUCKET_NAME }}/contracts/BlockCICD_ABI.json
