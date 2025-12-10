@@ -1,8 +1,7 @@
 fastapi
+mangum
 uvicorn
 web3
 python-dotenv
 py-solc-x
 pydantic
-sqlalchemy
-mangum

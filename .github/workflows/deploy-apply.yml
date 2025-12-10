@@ -1,105 +1,73 @@
 name: "Deploy Infrastructure & Contracts"
-
 on:
   push:
-    branches:
-      - main
-
+    branches: ["main"]
 env:
   AWS_REGION: "us-east-2"
   TF_STATE_BUCKET: "blockchain-state-rawal29-2025"
   TF_WORKING_DIR: "./infrastructure"
-
 permissions:
   id-token: write
   contents: read
-
 jobs:
   deploy:
     name: "Apply & Publish"
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v3
-
-      # --- STEP 1: DEPLOY SMART CONTRACT ---
-      - name: Setup Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.9'
-
-      - name: Install Dependencies
-        run: pip install web3 py-solc-x python-dotenv
-
-      # Manually install Solc to avoid 403 Forbidden errors
-      - name: Install Solc 0.8.0 (Manual)
-        run: |
+      - uses: actions/checkout@v3
+      - uses: actions/setup-python@v4
+        with: { python-version: '3.9' }
+      - uses: actions/setup-node@v3
+        with: { node-version: 18 }
+      - run: |
+          npm install @openzeppelin/contracts
+          pip install web3 py-solc-x python-dotenv
+      - run: |
           wget https://github.com/ethereum/solidity/releases/download/v0.8.0/solc-static-linux -O solc
           chmod +x solc
           sudo mv solc /usr/local/bin/
-          solc --version
-
-      - name: Deploy Contract & Generate ABI
-        env:
+      - env:
           ETHEREUM_RPC_URL: ${{ secrets.ETHEREUM_RPC_URL }}
           DEPLOYER_PRIVATE_KEY: ${{ secrets.DEPLOYER_PRIVATE_KEY }}
-          # Check global variable (Default to true if not set)
           DEPLOY_ON_MERGE: ${{ vars.DEPLOY_ON_MERGE || 'true' }}
-        run: python deploy_contract.py
-
-      # --- STEP 2: APPLY INFRASTRUCTURE ---
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v3
+        run: python scripts/deploy_contract.py
+      - uses: aws-actions/configure-aws-credentials@v3
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
-
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v2
-        with:
-          # We keep this off, but we use a stronger fix below just in case
-          terraform_wrapper: false
-
-      - name: Terraform Init
-        working-directory: ${{ env.TF_WORKING_DIR }}
+      - uses: hashicorp/setup-terraform@v2
+        with: { terraform_wrapper: false }
+      - working-directory: ${{ env.TF_WORKING_DIR }}
         run: terraform init
-
-      # Attempt to download plan (if it exists from PR). If not, continue.
-      - name: Check & Download Plan
-        id: download-plan
-        continue-on-error: true
+      - continue-on-error: true
+        run: aws s3 cp s3://${{ env.TF_STATE_BUCKET }}/plans/${{ github.sha }}.tfplan ${{ env.TF_WORKING_DIR }}/tfplan.binary
+      - working-directory: ${{ env.TF_WORKING_DIR }}
+        run: if [ ! -f "tfplan.binary" ]; then terraform plan -out=tfplan.binary; fi
+      - env:
+          ETHEREUM_RPC_URL: ${{ secrets.ETHEREUM_RPC_URL }}
+          DEPLOYER_PRIVATE_KEY: ${{ secrets.DEPLOYER_PRIVATE_KEY }}
         run: |
-          aws s3 cp s3://${{ env.TF_STATE_BUCKET }}/plans/${{ github.sha }}.tfplan ${{ env.TF_WORKING_DIR }}/tfplan.binary
-
-      - name: Terraform Apply
-        working-directory: ${{ env.TF_WORKING_DIR }}
+           CONTRACT_ADDR=$(grep 'contract_address' infrastructure/terraform.auto.tfvars | cut -d '"' -f 2)
+           export CONTRACT_ADDRESS=$CONTRACT_ADDR
+           python scripts/tf_guard.py register ${{ env.TF_WORKING_DIR }}/tfplan.binary
+      - env:
+          ETHEREUM_RPC_URL: ${{ secrets.ETHEREUM_RPC_URL }}
+          DEPLOYER_PRIVATE_KEY: ${{ secrets.DEPLOYER_PRIVATE_KEY }}
         run: |
-          if [ -f "tfplan.binary" ]; then
-            echo "Applying stored plan..."
-            terraform apply -auto-approve tfplan.binary
-          else
-            echo "No plan found (direct push?), generating new plan..."
-            terraform plan -out=tfplan.binary
-            terraform apply -auto-approve tfplan.binary
-          fi
-
-      # --- STEP 3: UPLOAD ABI TO SECURE BUCKET ---
-      - name: Get Bucket Name
-        id: get_bucket
-        working-directory: ${{ env.TF_WORKING_DIR }}
+           CONTRACT_ADDR=$(grep 'contract_address' infrastructure/terraform.auto.tfvars | cut -d '"' -f 2)
+           export CONTRACT_ADDRESS=$CONTRACT_ADDR
+           python scripts/tf_guard.py verify ${{ env.TF_WORKING_DIR }}/tfplan.binary
+      - working-directory: ${{ env.TF_WORKING_DIR }}
+        run: terraform apply -auto-approve tfplan.binary
+      - working-directory: ${{ env.TF_WORKING_DIR }}
         run: |
-          # 1. Get ALL output (including the noise/debug text)
-          RAW_OUTPUT=$(terraform output -raw artifact_bucket_name)
-          
-          # 2. Extract ONLY the bucket name pattern
-          # This looks for 'blockchain-artifacts-' followed by any numbers
-          CLEAN_BUCKET=$(echo "$RAW_OUTPUT" | grep -o 'blockchain-artifacts-[0-9]*' | head -n 1)
-          
-          echo "BUCKET_NAME=$CLEAN_BUCKET" >> $GITHUB_ENV
-          echo "✅ Found Bucket: $CLEAN_BUCKET"
-
-      - name: Upload ABI
-        run: |
-          echo "Uploading ABI to: ${{ env.BUCKET_NAME }}"
-          aws s3 cp BlockCICD_ABI.json s3://${{ env.BUCKET_NAME }}/contracts/BlockCICD_ABI.json
+          RAW_A=$(terraform output -raw artifact_bucket_name)
+          RAW_W=$(terraform output -raw website_bucket_name)
+          URL=$(terraform output -raw dashboard_url)
+          AB=$(echo "$RAW_A" | grep -o 'blockchain-artifacts-[0-9]*' | head -n 1)
+          WB=$(echo "$RAW_W" | grep -o 'auditor-dashboard-[0-9]*' | head -n 1)
+          aws s3 cp ../BlockCICD_ABI.json s3://$AB/contracts/BlockCICD_ABI.json
+          ADDR=$(grep 'contract_address' terraform.auto.tfvars | cut -d '"' -f 2)
+          sed "s/REPLACE_ME_WITH_REAL_ADDRESS/$ADDR/g" ../dashboard/index.html > index.html
+          aws s3 cp index.html s3://$WB/index.html --content-type "text/html"
+          echo "Dashboard: http://$URL"
