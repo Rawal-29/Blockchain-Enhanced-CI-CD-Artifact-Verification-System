@@ -66,16 +66,41 @@ jobs:
         working-directory: ${{ env.TF_WORKING_DIR }}
         run: terraform init
 
+      - name: Identify PR Number
+        uses: actions/github-script@v6
+        id: get-pr
+        with:
+          script: |
+            const { data } = await github.rest.repos.listPullRequestsAssociatedWithCommit({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              commit_sha: context.sha,
+            });
+            if (data.length === 0) {
+              console.log("No PR found associated with this commit.");
+              return "none";
+            }
+            console.log("Found PR #" + data[0].number);
+            return data[0].number;
+          result-encoding: string
+
       - name: Download Approved Plan
         id: download-plan
         run: |
-          aws s3 cp s3://${{ env.TF_STATE_BUCKET }}/plans/${{ github.sha }}.tfplan ${{ env.TF_WORKING_DIR }}/tfplan.binary || true
+          PR_NUM="${{ steps.get-pr.outputs.result }}"
+          if [ "$PR_NUM" == "none" ]; then
+            echo "Skipping download (Direct Push detected)."
+          else
+            echo "📥 Downloading Plan for PR #${PR_NUM}"
+            aws s3 cp s3://${{ env.TF_STATE_BUCKET }}/plans/pr-${PR_NUM}.tfplan ${{ env.TF_WORKING_DIR }}/tfplan.binary || true
+          fi
 
       - name: Enforce Security Gate
         working-directory: ${{ env.TF_WORKING_DIR }}
         run: |
           if [ ! -f "tfplan.binary" ]; then
             echo "CRITICAL SECURITY FAILURE: No authorized plan found!"
+            echo "Reason: Could not find 'pr-${{ steps.get-pr.outputs.result }}.tfplan' in S3."
             exit 1
           fi
 

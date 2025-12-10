@@ -51,7 +51,9 @@ jobs:
 
       - name: Upload Plan to Backend S3
         run: |
-          aws s3 cp ${{ env.TF_WORKING_DIR }}/tfplan.binary s3://${{ env.TF_STATE_BUCKET }}/plans/${{ steps.branch.outputs.head_sha }}.tfplan
+          PR_NUM="${{ github.event.issue.number }}"
+          echo "Uploading plan for PR #$PR_NUM"
+          aws s3 cp ${{ env.TF_WORKING_DIR }}/tfplan.binary s3://${{ env.TF_STATE_BUCKET }}/plans/pr-${PR_NUM}.tfplan
 
       - name: Convert Plan to Text
         working-directory: ${{ env.TF_WORKING_DIR }}
@@ -67,5 +69,5 @@ jobs:
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: `### ✅ Terraform Plan Generated\n**Plan stored in S3.**\n<details><summary>Show Plan</summary>\n\`\`\`hcl\n${plan.slice(0, 65000)}\n\`\`\`\n</details>`
+              body: `### ✅ Terraform Plan Generated\n**Plan stored in S3 as pr-${context.issue.number}.tfplan**\n<details><summary>Show Plan</summary>\n\`\`\`hcl\n${plan.slice(0, 65000)}\n\`\`\`\n</details>`
             })
