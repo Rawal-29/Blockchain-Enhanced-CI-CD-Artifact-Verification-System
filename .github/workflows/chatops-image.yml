@@ -1,38 +1,57 @@
-name: "ChatOps Image"
+name: "ChatOps - Build Image"
+
 on:
-  issue_comment: { types: [created] }
+  issue_comment:
+    types: [created]
+
 permissions:
   id-token: write
   contents: read
   pull-requests: write
+  packages: write
+
 jobs:
-  build:
+  build-image:
     if: github.event.issue.pull_request && contains(github.event.comment.body, '/create_image')
     runs-on: ubuntu-latest
+    
     steps:
-      - uses: xt0rted/pull-request-comment-branch@v2
+      - name: Get PR Branch
+        uses: xt0rted/pull-request-comment-branch@v2
         id: branch
-      - uses: actions/checkout@v3
-        with: { ref: ${{ steps.branch.outputs.head_ref }} }
-      - uses: aws-actions/configure-aws-credentials@v3
+
+      - name: Checkout Code
+        uses: actions/checkout@v3
+        with:
+          ref: ${{ steps.branch.outputs.head_ref }}
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v3
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: us-east-2
-      - uses: aws-actions/amazon-ecr-login@v1
-        id: login
-      - env:
-          REGISTRY: ${{ steps.login.outputs.registry }}
-          REPO: blockchain-api
-          TAG: ${{ steps.branch.outputs.head_sha }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
+
+      - name: Build and Push
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: blockchain-api
+          IMAGE_TAG: ${{ steps.branch.outputs.head_sha }}
         run: |
-          docker build -f Dockerfile.lambda -t $REGISTRY/$REPO:$TAG .
-          docker push $REGISTRY/$REPO:$TAG
-      - uses: actions/github-script@v6
+          docker build -f Dockerfile.lambda -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
+
+      - name: Comment Result
+        uses: actions/github-script@v6
         with:
           script: |
             github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: '✅ Image Created. Tag: `${{ steps.branch.outputs.head_sha }}`'
+              body: '✅ **Image Created!**\n\n**Tag:** `${{ env.IMAGE_TAG }}`\n\nUpdate `infrastructure/terraform.tfvars` with this tag.'
             })

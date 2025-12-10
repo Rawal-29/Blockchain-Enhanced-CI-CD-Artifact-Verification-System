@@ -1,37 +1,64 @@
-name: "ChatOps Plan"
+name: "ChatOps - Terraform Plan"
+
 on:
-  issue_comment: { types: [created] }
+  issue_comment:
+    types: [created]
+
 env:
   AWS_REGION: "us-east-2"
   TF_STATE_BUCKET: "blockchain-state-rawal29-2025"
   TF_WORKING_DIR: "./infrastructure"
+
 permissions:
   id-token: write
   contents: read
   pull-requests: write
+
 jobs:
   plan:
     if: github.event.issue.pull_request && contains(github.event.comment.body, '/tfplan')
     runs-on: ubuntu-latest
+
     steps:
-      - uses: xt0rted/pull-request-comment-branch@v2
+      - name: Get PR Branch
+        uses: xt0rted/pull-request-comment-branch@v2
         id: branch
-      - uses: actions/checkout@v3
-        with: { ref: ${{ steps.branch.outputs.head_ref }} }
-      - uses: aws-actions/configure-aws-credentials@v3
+
+      - name: Checkout Code
+        uses: actions/checkout@v3
+        with:
+          ref: ${{ steps.branch.outputs.head_ref }}
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v3
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
-      - uses: hashicorp/setup-terraform@v2
-        with: { terraform_wrapper: false }
-      - working-directory: ${{ env.TF_WORKING_DIR }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_wrapper: false
+
+      - name: Terraform Init
+        working-directory: ${{ env.TF_WORKING_DIR }}
         run: terraform init
-      - working-directory: ${{ env.TF_WORKING_DIR }}
+
+      - name: Terraform Plan
+        id: plan
+        working-directory: ${{ env.TF_WORKING_DIR }}
         run: terraform plan -out=tfplan.binary
-      - run: aws s3 cp ${{ env.TF_WORKING_DIR }}/tfplan.binary s3://${{ env.TF_STATE_BUCKET }}/plans/${{ steps.branch.outputs.head_sha }}.tfplan
-      - working-directory: ${{ env.TF_WORKING_DIR }}
+
+      - name: Upload Plan to Backend S3
+        run: |
+          aws s3 cp ${{ env.TF_WORKING_DIR }}/tfplan.binary s3://${{ env.TF_STATE_BUCKET }}/plans/${{ steps.branch.outputs.head_sha }}.tfplan
+
+      - name: Convert Plan to Text
+        working-directory: ${{ env.TF_WORKING_DIR }}
         run: terraform show -no-color tfplan.binary > plan.txt
-      - uses: actions/github-script@v6
+
+      - name: Post Plan to GitHub
+        uses: actions/github-script@v6
         with:
           script: |
             const fs = require('fs');
@@ -40,5 +67,5 @@ jobs:
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: `### ✅ Plan Generated\n<details><summary>Details</summary>\n\`\`\`\n${plan.slice(0,65000)}\n\`\`\`\n</details>`
+              body: `### ✅ Terraform Plan Generated\n**Plan stored in S3.**\n<details><summary>Show Plan</summary>\n\`\`\`hcl\n${plan.slice(0, 65000)}\n\`\`\`\n</details>`
             })
