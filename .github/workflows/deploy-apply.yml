@@ -32,12 +32,20 @@ jobs:
       - name: Install Dependencies
         run: pip install web3 py-solc-x python-dotenv
 
+      # [FIX] Manually install Solc to avoid 403 Forbidden errors
+      - name: Install Solc 0.8.0 (Manual)
+        run: |
+          wget https://github.com/ethereum/solidity/releases/download/v0.8.0/solc-static-linux -O solc
+          chmod +x solc
+          sudo mv solc /usr/local/bin/
+          solc --version
+
       - name: Deploy Contract & Generate ABI
         env:
           ETHEREUM_RPC_URL: ${{ secrets.ETHEREUM_RPC_URL }}
           DEPLOYER_PRIVATE_KEY: ${{ secrets.DEPLOYER_PRIVATE_KEY }}
         run: python deploy_contract.py
-        # This script generates 'BlockCICD_ABI.json' in the root
+        # This script generates 'BlockCICD_ABI.json' and 'infrastructure/terraform.auto.tfvars'
 
       # --- STEP 2: APPLY INFRASTRUCTURE ---
       - name: Configure AWS Credentials
@@ -53,7 +61,7 @@ jobs:
         working-directory: ${{ env.TF_WORKING_DIR }}
         run: terraform init
 
-      # Attempt to download plan (if it exists from PR). If not, generate new one.
+      # Attempt to download plan (if it exists from PR). If not, continue.
       - name: Check & Download Plan
         id: download-plan
         continue-on-error: true
