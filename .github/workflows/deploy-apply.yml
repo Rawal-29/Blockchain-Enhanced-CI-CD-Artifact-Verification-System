@@ -44,8 +44,9 @@ jobs:
         env:
           ETHEREUM_RPC_URL: ${{ secrets.ETHEREUM_RPC_URL }}
           DEPLOYER_PRIVATE_KEY: ${{ secrets.DEPLOYER_PRIVATE_KEY }}
+          # Check global variable (Default to true if not set)
+          DEPLOY_ON_MERGE: ${{ vars.DEPLOY_ON_MERGE || 'true' }}
         run: python deploy_contract.py
-        # This script generates 'BlockCICD_ABI.json' and 'infrastructure/terraform.auto.tfvars'
 
       # --- STEP 2: APPLY INFRASTRUCTURE ---
       - name: Configure AWS Credentials
@@ -56,6 +57,9 @@ jobs:
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v2
+        with:
+          # [CRITICAL FIX] Disabling wrapper prevents "::debug::" noise in outputs
+          terraform_wrapper: false
 
       - name: Terraform Init
         working-directory: ${{ env.TF_WORKING_DIR }}
@@ -80,12 +84,20 @@ jobs:
             terraform apply -auto-approve tfplan.binary
           fi
 
-     # --- STEP 3: UPLOAD ABI TO SECURE BUCKET ---
+      # --- STEP 3: UPLOAD ABI TO SECURE BUCKET ---
       - name: Get Bucket Name
         id: get_bucket
         working-directory: ${{ env.TF_WORKING_DIR }}
         run: |
-          # Use -raw to get the value, and capture strictly the last line of output to avoid noise
-          BUCKET_VAL=$(terraform output -raw artifact_bucket_name | tail -n 1)
-          echo "BUCKET_NAME=$BUCKET_VAL" >> $GITHUB_ENV
-          echo "✅ Found Bucket: $BUCKET_VAL"
+          # 1. Get raw output
+          RAW=$(terraform output -raw artifact_bucket_name)
+          # 2. Clean it (Strip any '::' debug text if wrapper was on)
+          CLEAN_BUCKET=$(echo "$RAW" | awk -F'::' '{print $1}')
+          
+          echo "BUCKET_NAME=$CLEAN_BUCKET" >> $GITHUB_ENV
+          echo "✅ Found Bucket: $CLEAN_BUCKET"
+
+      - name: Upload ABI
+        run: |
+          echo "Uploading ABI to: ${{ env.BUCKET_NAME }}"
+          aws s3 cp BlockCICD_ABI.json s3://${{ env.BUCKET_NAME }}/contracts/BlockCICD_ABI.json
