@@ -2,33 +2,43 @@ import os
 import json
 import sys
 from web3 import Web3, HTTPProvider
-from solcx import compile_source, install_solc, set_solc_version
+# Import 'import_installed_solc' to use the binary we downloaded in CI
+from solcx import compile_source, install_solc, set_solc_version, import_installed_solc
 from dotenv import load_dotenv
 
 load_dotenv(".env.local")
 
-# --- FIX: Explicitly Install Solc ---
-print("🔧 Installing Solidity Compiler (0.8.0)...")
+# --- FIXED: Robust Installation Logic ---
+print("🔧 Setting up Solidity Compiler (0.8.0)...")
+
 try:
-    # We force the installation of 0.8.0
-    install_solc("0.8.0")
-    # We explicitly set this as the active version
-    set_solc_version("0.8.0")
-    print("✅ Solc 0.8.0 installed and active.")
+    # 1. First, try to "import" the binary we installed via GitHub Actions
+    # This tells python: "Hey, use the 'solc' at /usr/local/bin/solc"
+    try:
+        import_installed_solc("/usr/local/bin/solc")
+        set_solc_version("0.8.0")
+        print("✅ Using system-installed Solc 0.8.0")
+    except Exception:
+        # Fallback for local development (Mac/Windows)
+        print("⚠️ System solc not found (Normal on local). Checking standard install...")
+        install_solc("0.8.0")
+        set_solc_version("0.8.0")
+        print("✅ Using standard Solc 0.8.0")
+    
 except Exception as e:
-    print(f"❌ Failed to install Solc: {e}")
+    print(f"❌ Critical Error: Could not setup Solc: {e}")
     sys.exit(1)
 
 # 2. Compile Contract
 print("Compiling BlockCICD.sol...")
-with open("contracts/BlockCICD.sol", "r") as f:
-    contract_source_code = f.read()
-
 try:
+    with open("contracts/BlockCICD.sol", "r") as f:
+        contract_source_code = f.read()
+
     compiled_sol = compile_source(
         contract_source_code,
         output_values=["abi", "bin"],
-        solc_version="0.8.0" # Explicitly use the version we just installed
+        solc_version="0.8.0"
     )
 except Exception as e:
     print(f"❌ Compilation Failed: {e}")
@@ -74,10 +84,21 @@ if RPC_URL and PRIVATE_KEY:
             print("⏳ Waiting for receipt... (Ctrl+C if this takes too long)")
             
             tx_receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
-            print(f"📌 Contract Address: {tx_receipt.contractAddress}")
+            contract_address = tx_receipt.contractAddress
+            print(f"📌 Contract Address: {contract_address}")
+
+            # --- NEW: Generate Terraform Variables File ---
+            tfvars_content = f'contract_address = "{contract_address}"\n'
+            
+            # Write to infrastructure/terraform.auto.tfvars
+            tf_path = os.path.join("infrastructure", "terraform.auto.tfvars")
+            with open(tf_path, "w") as tf_file:
+                tf_file.write(tfvars_content)
+                
+            print(f"🔗 Linked Contract to Infrastructure: {tf_path}")
+
     except Exception as e:
         print(f"⚠️  Deployment skipped/failed: {e}")
-        # We don't exit(1) here because saving the ABI is the most critical part for the pipeline
         print("✅ ABI was saved successfully. You can proceed with Infrastructure.")
 else:
     print("⚠️  Missing RPC_URL or PRIVATE_KEY. Skipping deployment.")
