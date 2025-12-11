@@ -35,7 +35,7 @@ jobs:
 
       - name: Install Dependencies
         run: |
-          npm install @openzeppelin/contracts
+          npm install @openzeppelin/contracts@4.9.6
           pip install web3 py-solc-x python-dotenv
 
       - name: Install Solc
@@ -139,4 +139,3 @@ jobs:
           sed "s/REPLACE_ME_WITH_REAL_ADDRESS/$CONTRACT_ADDR/g" ../dashboard/index.html > index_final.html
           aws s3 cp index_final.html s3://$WEBSITE_BUCKET/index.html --content-type "text/html"
           echo "Dashboard Live at: http://$DASHBOARD_URL"
-          
