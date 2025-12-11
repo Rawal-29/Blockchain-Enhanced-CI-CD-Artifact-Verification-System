@@ -1,1 +1,2 @@
 image_tag = "1c0e018698acdfec6178d28508a5d49e83d48a98"
+contract_address = "0xF312B5b112333857e969CE2933d0ca57eB5e5607"
