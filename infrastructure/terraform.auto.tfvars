@@ -1,2 +1,1 @@
-image_tag = "1c0e018698acdfec6178d28508a5d49e83d48a98"
 contract_address = "0xe56996D08F8EdAE5f86cB6086FB4c199eb40333F"

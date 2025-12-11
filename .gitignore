@@ -10,6 +10,5 @@ __pycache__/
 .terraform.lock.hcl
 *.tfplan
 *.binary
-BlockCICD_ABI.json
 plan.txt
 local/
