@@ -1,4 +1,4 @@
-name: "Deploy Infrastructure & Contracts"
+name: "Verify And Deploy Infrastructure"
 
 on:
   push:
@@ -28,28 +28,8 @@ jobs:
         with:
           python-version: '3.9'
 
-      - name: Install Node
-        uses: actions/setup-node@v3
-        with:
-          node-version: 18
-
       - name: Install Dependencies
-        run: |
-          npm install @openzeppelin/contracts@4.9.6
-          pip install web3 py-solc-x python-dotenv
-
-      - name: Install Solc
-        run: |
-          wget https://github.com/ethereum/solidity/releases/download/v0.8.0/solc-static-linux -O solc
-          chmod +x solc
-          sudo mv solc /usr/local/bin/
-
-      - name: Deploy Smart Contract
-        env:
-          ETHEREUM_RPC_URL: ${{ secrets.ETHEREUM_RPC_URL }}
-          DEPLOYER_PRIVATE_KEY: ${{ secrets.DEPLOYER_PRIVATE_KEY }}
-          DEPLOY_ON_MERGE: ${{ vars.DEPLOY_ON_MERGE || 'true' }}
-        run: python scripts/deploy_contract.py
+        run: pip install web3 python-dotenv
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v3
@@ -76,12 +56,7 @@ jobs:
               repo: context.repo.repo,
               commit_sha: context.sha,
             });
-            if (data.length === 0) {
-              console.log("No PR found associated with this commit.");
-              return "none";
-            }
-            console.log("Found PR #" + data[0].number);
-            return data[0].number;
+            return (data.length === 0) ? "none" : data[0].number;
           result-encoding: string
 
       - name: Download Approved Plan
@@ -89,29 +64,19 @@ jobs:
         run: |
           PR_NUM="${{ steps.get-pr.outputs.result }}"
           if [ "$PR_NUM" == "none" ]; then
-            echo "Skipping download (Direct Push detected)."
+             echo "Direct Push detected. No S3 plan available."
           else
-            echo "📥 Downloading Plan for PR #${PR_NUM}"
-            aws s3 cp s3://${{ env.TF_STATE_BUCKET }}/plans/pr-${PR_NUM}.tfplan ${{ env.TF_WORKING_DIR }}/tfplan.binary || true
+             echo "Downloading Plan for PR #${PR_NUM}"
+             aws s3 cp s3://${{ env.TF_STATE_BUCKET }}/plans/pr-${PR_NUM}.tfplan ${{ env.TF_WORKING_DIR }}/tfplan.binary || true
           fi
 
       - name: Enforce Security Gate
         working-directory: ${{ env.TF_WORKING_DIR }}
         run: |
           if [ ! -f "tfplan.binary" ]; then
-            echo "CRITICAL SECURITY FAILURE: No authorized plan found!"
-            echo "Reason: Could not find 'pr-${{ steps.get-pr.outputs.result }}.tfplan' in S3."
+            echo "CRITICAL: No authorized plan found! Pipeline Aborted."
             exit 1
           fi
-
-      - name: Blockchain Register
-        env:
-          ETHEREUM_RPC_URL: ${{ secrets.ETHEREUM_RPC_URL }}
-          DEPLOYER_PRIVATE_KEY: ${{ secrets.DEPLOYER_PRIVATE_KEY }}
-        run: |
-          CONTRACT_ADDR=$(grep 'contract_address' infrastructure/terraform.auto.tfvars | cut -d '"' -f 2)
-          export CONTRACT_ADDRESS=$CONTRACT_ADDR
-          python scripts/tf_guard.py register ${{ env.TF_WORKING_DIR }}/tfplan.binary
 
       - name: Blockchain Verify
         env:
@@ -132,10 +97,14 @@ jobs:
           RAW_ARTIFACT=$(terraform output -raw artifact_bucket_name)
           RAW_WEBSITE=$(terraform output -raw website_bucket_name)
           DASHBOARD_URL=$(terraform output -raw dashboard_url)
+          
           ARTIFACT_BUCKET=$(echo "$RAW_ARTIFACT" | grep -o 'blockchain-artifacts-[0-9]*' | head -n 1)
           WEBSITE_BUCKET=$(echo "$RAW_WEBSITE" | grep -o 'auditor-dashboard-[0-9]*' | head -n 1)
+          
           aws s3 cp ../BlockCICD_ABI.json s3://$ARTIFACT_BUCKET/contracts/BlockCICD_ABI.json
+          
           CONTRACT_ADDR=$(grep 'contract_address' terraform.auto.tfvars | cut -d '"' -f 2)
           sed "s/REPLACE_ME_WITH_REAL_ADDRESS/$CONTRACT_ADDR/g" ../dashboard/index.html > index_final.html
           aws s3 cp index_final.html s3://$WEBSITE_BUCKET/index.html --content-type "text/html"
+          
           echo "Dashboard Live at: http://$DASHBOARD_URL"
