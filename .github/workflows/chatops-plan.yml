@@ -16,7 +16,7 @@ permissions:
 
 jobs:
   plan:
-    if: github.event.issue.pull_request && contains(github.event.comment.body, '/tfplan')
+    if: github.event.issue.pull_request && (contains(github.event.comment.body, '/tfplan') || contains(github.event.comment.body, '/tfplanfinal'))
     runs-on: ubuntu-latest
 
     steps:
@@ -28,6 +28,14 @@ jobs:
         uses: actions/checkout@v3
         with:
           ref: ${{ steps.branch.outputs.head_ref }}
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Install Python Deps
+        run: pip install web3 python-dotenv
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v3
@@ -49,10 +57,21 @@ jobs:
         working-directory: ${{ env.TF_WORKING_DIR }}
         run: terraform plan -out=tfplan.binary
 
+      - name: Blockchain Register
+        if: contains(github.event.comment.body, '/tfplanfinal')
+        env:
+          ETHEREUM_RPC_URL: ${{ secrets.ETHEREUM_RPC_URL }}
+          DEPLOYER_PRIVATE_KEY: ${{ secrets.DEPLOYER_PRIVATE_KEY }}
+        run: |
+          CONTRACT_ADDR=$(grep 'contract_address' infrastructure/terraform.auto.tfvars | cut -d '"' -f 2)
+          export CONTRACT_ADDRESS=$CONTRACT_ADDR
+          python scripts/tf_guard.py register ${{ env.TF_WORKING_DIR }}/tfplan.binary
+
       - name: Upload Plan to Backend S3
+        if: contains(github.event.comment.body, '/tfplanfinal')
         run: |
           PR_NUM="${{ github.event.issue.number }}"
-          echo "Uploading plan for PR #$PR_NUM"
+          echo "Uploading FINAL plan for PR #$PR_NUM"
           aws s3 cp ${{ env.TF_WORKING_DIR }}/tfplan.binary s3://${{ env.TF_STATE_BUCKET }}/plans/pr-${PR_NUM}.tfplan
 
       - name: Convert Plan to Text
@@ -65,9 +84,12 @@ jobs:
           script: |
             const fs = require('fs');
             const plan = fs.readFileSync('${{ env.TF_WORKING_DIR }}/plan.txt', 'utf8');
+            const isFinal = context.payload.comment.body.includes('/tfplanfinal');
+            const status = isFinal ? "🚀 **FINAL PLAN REGISTERED** (Ready to Merge)" : "📝 **DRAFT PLAN** (Review Only)";
+            
             github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: `### ✅ Terraform Plan Generated\n**Plan stored in S3 as pr-${context.issue.number}.tfplan**\n<details><summary>Show Plan</summary>\n\`\`\`hcl\n${plan.slice(0, 65000)}\n\`\`\`\n</details>`
+              body: `### ${status}\n\n<details><summary>Show Plan</summary>\n\`\`\`hcl\n${plan.slice(0, 60000)}\n\`\`\`\n</details>`
             })
