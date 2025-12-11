@@ -83,7 +83,7 @@ jobs:
           ETHEREUM_RPC_URL: ${{ secrets.ETHEREUM_RPC_URL }}
           DEPLOYER_PRIVATE_KEY: ${{ secrets.DEPLOYER_PRIVATE_KEY }}
         run: |
-          CONTRACT_ADDR=$(grep 'contract_address' infrastructure/terraform.auto.tfvars | cut -d '"' -f 2)
+          CONTRACT_ADDR=$(grep 'contract_address' infrastructure/terraform.tfvars | cut -d '"' -f 2)
           export CONTRACT_ADDRESS=$CONTRACT_ADDR
           python scripts/tf_guard.py verify ${{ env.TF_WORKING_DIR }}/tfplan.binary
 

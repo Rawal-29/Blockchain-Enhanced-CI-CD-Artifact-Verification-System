@@ -47,7 +47,7 @@ jobs:
           DEPLOYER_PRIVATE_KEY: ${{ secrets.DEPLOYER_PRIVATE_KEY }}
         run: |
           python scripts/deploy_contract.py
-          NEW_ADDRESS=$(grep 'contract_address' infrastructure/terraform.auto.tfvars | cut -d '"' -f 2)
+          NEW_ADDRESS=$(grep 'contract_address' infrastructure/terraform.tfvars | cut -d '"' -f 2)
           echo "ADDRESS=$NEW_ADDRESS" >> $GITHUB_OUTPUT
 
       - name: Comment Result
