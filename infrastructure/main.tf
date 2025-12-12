@@ -55,3 +55,10 @@ resource "aws_s3_bucket_policy" "public_read" {
 resource "aws_s3_bucket" "test" {
   bucket_prefix = "test"
 }
+
+resource "aws_s3_bucket" "test2" {
+  bucket_prefix = "test2"
+}
+resource "aws_s3_bucket" "test5" {
+  bucket_prefix = "tes5t"
+}
