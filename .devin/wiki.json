@@ -1,0 +1,281 @@
+{
+  "repo_notes": [
+    {
+      "content": ""
+    }
+  ],
+  "pages": [
+    {
+      "title": "Overview",
+      "purpose": "Introduce the Blockchain-Enhanced CI/CD Artifact Verification System, explaining its purpose, high-level architecture, and how it mitigates supply chain attacks and insider threats",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Core Concepts",
+      "purpose": "Explain the fundamental concepts and security model underlying the system, including how blockchain provides immutable verification",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Sign-then-Verify Workflow",
+      "purpose": "Detail the two-phase workflow where Terraform plans are registered on-chain during review, then cryptographically verified before deployment",
+      "parent": "Core Concepts",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Security Gates and Threat Model",
+      "purpose": "Explain the four security gates in the deployment pipeline and how they protect against tampering, unauthorized changees, and supply chain attacks",
+      "parent": "Core Concepts",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Blockchain Layer",
+      "purpose": "Document the Ethereum smart contract infrastructure that provides immutable verification and token incentives",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "BlockCICD Smart Contract",
+      "purpose": "Document the Solidity smart contract, its functions (storeHash, verifyHash), events, and ERC20 token implementation",
+      "parent": "Blockchain Layer",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Contract Deployment",
+      "purpose": "Explain how the smart contract is deployed to Sepolia testnet via ChatOps, including the deploy_contract.py script and simulation mode",
+      "parent": "Blockchain Layer",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "DevOps Trust Tokens (DTT)",
+      "purpose": "Explain the DTT token economics, minting mechanisms, and how tokens serve as proof of verification activities",
+      "parent": "Blockchain Layer",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "CI/CD Workflows",
+      "purpose": "Document the GitHub Actions workflows that orchestrate ChatOps commands, plan generation, verification, and deployment",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "ChatOps Planning Workflow",
+      "purpose": "Detail the chatops-plan.yml workflow that handles /tfplan and /tfplanfinal commands for plan generation and registration",
+      "parent": "CI/CD Workflows",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Deployment Workflow",
+      "purpose": "Document the deploy-apply.yml workflow that verifies plan hashes and deploys infrastructure with security gates",
+      "parent": "CI/CD Workflows",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Supporting Workflows",
+      "purpose": "Document the image building and contract deployment ChatOps workflows that support the main pipeline",
+      "parent": "CI/CD Workflows",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Infrastructure",
+      "purpose": "Document the AWS infrastructure provisioned by Terraform, including S3 buckets, Lambda functions, and their security configurations",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "S3 Buckets",
+      "purpose": "Detail the three S3 buckets: blockchain-state (Terraform state), blockchain-artifacts (private storage), and auditor-dashboard (public website)",
+      "parent": "Infrastructure",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Lambda Verification API",
+      "purpose": "Document the Lambda function deployment, container configuration, environment variables, and public API endpoints",
+      "parent": "Infrastructure",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Terraform Configuration",
+      "purpose": "Document Terraform variables, outputs, state backend configuration, and how infrastructure is parameterized",
+      "parent": "Infrastructure",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Lambda Container Build",
+      "purpose": "Document how the Lambda function Docker container is built from Dockerfile.lambda, including dependencies and FastAPI application structure",
+      "parent": "Infrastructure",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Verification Tools",
+      "purpose": "Document the tools available for verifying artifact integrity, both internal (tf_guard.py) and external (API and dashboard)",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "tf_guard.py CLI",
+      "purpose": "Document the Python CLI tool for registering and verifying Terraform plan hashes, including commands, exit codes, and error handling",
+      "parent": "Verification Tools",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Public Verification API",
+      "purpose": "Document the Lambda-based REST API for external verification, including endpoints, request/response formats, and authentication",
+      "parent": "Verification Tools",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Auditor Dashboard",
+      "purpose": "Document the static HTML/JavaScript dashboard that displays real-time verification events, DTT token supply, and provides transparency",
+      "parent": "Verification Tools",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Configuration and Setup",
+      "purpose": "Provide guides for configuring and deploying the system, including required secrets, environment variables, and deployment procedures",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Environment Variables and Secrets",
+      "purpose": "Document all required environment variables and GitHub Secrets, including ETHEREUM_RPC_URL, DEPLOYER_PRIVATE_KEY, and AWS_ROLE_ARN",
+      "parent": "Configuration and Setup",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Initial Deployment Guide",
+      "purpose": "Step-by-step guide for deploying the system from scratch, including contract deployment, infrastructure provisioning, and testing",
+      "parent": "Configuration and Setup",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Reference",
+      "purpose": "Quick reference documentation for commands, APIs, and configuration options",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "ChatOps Commands Reference",
+      "purpose": "Complete reference of all ChatOps commands (/tfplan, /tfplanfinal, /deploy_contract, /create_image) with parameters and expected behavior",
+      "parent": "Reference",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Smart Contract ABI Reference",
+      "purpose": "Complete reference of the BlockCICD contract ABI, including all functions, events, and data structures",
+      "parent": "Reference",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Terraform Variables Reference",
+      "purpose": "Complete reference of all Terraform variables, their types, defaults, and usage in infrastructure provisioning",
+      "parent": "Reference",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    }
+  ]
+}
