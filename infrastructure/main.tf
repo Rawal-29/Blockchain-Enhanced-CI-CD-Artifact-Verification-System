@@ -9,7 +9,7 @@ resource "aws_dynamodb_table" "terraform_lock" {
     type = "S"
   }
 
-  tags = { Project = "BlockCICD", Purpose = "TerraformStateLock" }
+  tags = { Project = "BlockCICD", Purpose = "TerraformStateLock", Environment = "prod" }
 }
 
 resource "aws_s3_bucket" "artifact_bucket" {
