@@ -21,7 +21,7 @@ jobs:
 
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Setup Python
         uses: actions/setup-python@v4
@@ -29,36 +29,38 @@ jobs:
           python-version: '3.9'
 
       - name: Install Node
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
           node-version: 18
 
       - name: Install Dependencies
         run: |
           npm install @openzeppelin/contracts@4.9.6
-          pip install web3 py-solc-x python-dotenv
+          pip install web3==7.3.0 py-solc-x==2.0.3 python-dotenv==1.0.1
 
       - name: Install Solc
         run: |
-          wget https://github.com/ethereum/solidity/releases/download/v0.8.0/solc-static-linux -O solc
+          wget https://github.com/ethereum/solidity/releases/download/v0.8.20/solc-static-linux -O solc
           chmod +x solc
           sudo mv solc /usr/local/bin/
 
-      - name: Deploy Smart Contract
+      # C10: only deploy contract when DEPLOY_ON_MERGE is explicitly set to 'true'
+      # Default is 'false' to prevent re-deploying on every merge and orphaning history
+      - name: Deploy Smart Contract (if needed)
         env:
           ETHEREUM_RPC_URL: ${{ secrets.ETHEREUM_RPC_URL }}
           DEPLOYER_PRIVATE_KEY: ${{ secrets.DEPLOYER_PRIVATE_KEY }}
-          DEPLOY_ON_MERGE: ${{ vars.DEPLOY_ON_MERGE || 'true' }}
+          DEPLOY_ON_MERGE: ${{ vars.DEPLOY_ON_MERGE || 'false' }}
         run: python scripts/deploy_contract.py
 
       - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v3
+        uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v2
+        uses: hashicorp/setup-terraform@v3
         with:
           terraform_wrapper: false
 
@@ -84,6 +86,7 @@ jobs:
             return data[0].number;
           result-encoding: string
 
+      # C6: download content-addressed plan via the PR's approved hash reference
       - name: Download Approved Plan
         id: download-plan
         run: |
@@ -91,36 +94,33 @@ jobs:
           if [ "$PR_NUM" == "none" ]; then
             echo "Skipping download (Direct Push detected)."
           else
-            echo "📥 Downloading Plan for PR #${PR_NUM}"
-            aws s3 cp s3://${{ env.TF_STATE_BUCKET }}/plans/pr-${PR_NUM}.tfplan ${{ env.TF_WORKING_DIR }}/tfplan.binary || true
+            echo "Fetching approved plan hash for PR #${PR_NUM}"
+            aws s3 cp "s3://${{ env.TF_STATE_BUCKET }}/plans/pr-${PR_NUM}.ref" /tmp/plan.ref
+            PLAN_HASH=$(cat /tmp/plan.ref | tr -d '[:space:]')
+            echo "plan_hash=$PLAN_HASH" >> "$GITHUB_OUTPUT"
+            echo "Plan hash: $PLAN_HASH"
+            aws s3 cp "s3://${{ env.TF_STATE_BUCKET }}/plans/${PLAN_HASH}.json" \
+              "${{ env.TF_WORKING_DIR }}/tfplan.json"
+            aws s3 cp "s3://${{ env.TF_STATE_BUCKET }}/plans/${PLAN_HASH}.binary" \
+              "${{ env.TF_WORKING_DIR }}/tfplan.binary"
           fi
 
       - name: Enforce Security Gate
         working-directory: ${{ env.TF_WORKING_DIR }}
         run: |
-          if [ ! -f "tfplan.binary" ]; then
+          if [ ! -f "tfplan.json" ] || [ ! -f "tfplan.binary" ]; then
             echo "CRITICAL SECURITY FAILURE: No authorized plan found!"
-            echo "Reason: Could not find 'pr-${{ steps.get-pr.outputs.result }}.tfplan' in S3."
+            echo "Reason: Could not find approved plan for PR ${{ steps.get-pr.outputs.result }} in S3."
             exit 1
           fi
 
-      - name: Blockchain Register
-        env:
-          ETHEREUM_RPC_URL: ${{ secrets.ETHEREUM_RPC_URL }}
-          DEPLOYER_PRIVATE_KEY: ${{ secrets.DEPLOYER_PRIVATE_KEY }}
-        run: |
-          CONTRACT_ADDR=$(grep 'contract_address' infrastructure/terraform.auto.tfvars | cut -d '"' -f 2)
-          export CONTRACT_ADDRESS=$CONTRACT_ADDR
-          python scripts/tf_guard.py register ${{ env.TF_WORKING_DIR }}/tfplan.binary
-
+      # C1: only verify here — registration happened at plan/approval time in chatops-plan.yml
       - name: Blockchain Verify
         env:
           ETHEREUM_RPC_URL: ${{ secrets.ETHEREUM_RPC_URL }}
           DEPLOYER_PRIVATE_KEY: ${{ secrets.DEPLOYER_PRIVATE_KEY }}
-        run: |
-          CONTRACT_ADDR=$(grep 'contract_address' infrastructure/terraform.auto.tfvars | cut -d '"' -f 2)
-          export CONTRACT_ADDRESS=$CONTRACT_ADDR
-          python scripts/tf_guard.py verify ${{ env.TF_WORKING_DIR }}/tfplan.binary
+          CONTRACT_ADDRESS: ${{ secrets.CONTRACT_ADDRESS }}
+        run: python scripts/tf_guard.py verify ${{ env.TF_WORKING_DIR }}/tfplan.json
 
       - name: Terraform Apply
         working-directory: ${{ env.TF_WORKING_DIR }}

@@ -12,28 +12,46 @@ permissions:
 
 jobs:
   build-image:
-    if: github.event.issue.pull_request && contains(github.event.comment.body, '/create_image')
+    # C5: anchor trigger, restrict to repo members only
+    if: |
+      github.event.issue.pull_request &&
+      startsWith(github.event.comment.body, '/create_image') &&
+      contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)
     runs-on: ubuntu-latest
-    
+
     steps:
+      # C5: refuse fork PRs — building fork code with AWS ECR creds is RCE
+      - name: Reject Fork PRs
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const pr = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.issue.number,
+            });
+            if (pr.data.head.repo.fork) {
+              core.setFailed('Security: /create_image is not permitted on fork PRs.');
+            }
+
       - name: Get PR Branch
         uses: xt0rted/pull-request-comment-branch@v2
         id: branch
 
       - name: Checkout Code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
-          ref: ${{ steps.branch.outputs.head_ref }}
+          ref: ${{ steps.branch.outputs.head_sha }}
 
       - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v3
+        uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: us-east-2
 
       - name: Login to Amazon ECR
         id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v1
+        uses: aws-actions/amazon-ecr-login@v2
 
       - name: Build and Push
         env:

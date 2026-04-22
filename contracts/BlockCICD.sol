@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.0;
+// M4: pinned to 0.8.20+ to avoid silent behavioral changes across OZ major versions
+pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
@@ -9,15 +10,13 @@ contract BlockCICD is ERC20, Ownable {
 
     event PlanVerified(bytes32 indexed planHash, address indexed auditor, uint256 timestamp);
 
-
-    constructor() ERC20("DevOps Trust Token", "DTT") {
-
-    }
+    // M4: OZ 5.x requires explicit Ownable(msg.sender) in constructor
+    constructor() ERC20("DevOps Trust Token", "DTT") Ownable(msg.sender) {}
 
     function storeHash(bytes32 hashValue) public onlyOwner {
         require(verifiedHashes[hashValue] == 0, "Hash already registered");
         verifiedHashes[hashValue] = block.timestamp;
-        
+
         _mint(msg.sender, 10 * 10 ** decimals());
         emit PlanVerified(hashValue, msg.sender, block.timestamp);
     }
