@@ -17,7 +17,7 @@ permissions:
 jobs:
   plan:
     # C5: anchor trigger, restrict to repo members, never run on fork PRs
-    if: |
+    if: >-
       github.event.issue.pull_request &&
       startsWith(github.event.comment.body, '/tfplan') &&
       contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)

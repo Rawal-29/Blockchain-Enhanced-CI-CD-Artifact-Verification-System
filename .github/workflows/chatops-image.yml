@@ -13,7 +13,7 @@ permissions:
 jobs:
   build-image:
     # C5: anchor trigger, restrict to repo members only
-    if: |
+    if: >-
       github.event.issue.pull_request &&
       startsWith(github.event.comment.body, '/create_image') &&
       contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)
