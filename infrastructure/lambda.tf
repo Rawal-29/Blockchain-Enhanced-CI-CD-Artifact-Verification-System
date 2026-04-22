@@ -1,13 +1,3 @@
-# C9: read secrets from SSM Parameter Store rather than hard-coding "placeholder"
-data "aws_ssm_parameter" "ethereum_rpc_url" {
-  name = "/blockchain-cicd/ethereum-rpc-url"
-}
-
-data "aws_ssm_parameter" "deployer_private_key" {
-  name            = "/blockchain-cicd/deployer-private-key"
-  with_decryption = true
-}
-
 resource "aws_lambda_function" "api" {
   function_name = "blockchain-verification-api"
   role          = aws_iam_role.lambda_exec.arn
@@ -18,9 +8,10 @@ resource "aws_lambda_function" "api" {
 
   environment {
     variables = {
-      ETHEREUM_RPC_URL     = data.aws_ssm_parameter.ethereum_rpc_url.value
+      # C9: secrets passed via TF_VAR_ env vars from GitHub Actions secrets at plan/apply time
+      ETHEREUM_RPC_URL     = var.ethereum_rpc_url
       CONTRACT_ADDRESS     = var.contract_address
-      DEPLOYER_PRIVATE_KEY = data.aws_ssm_parameter.deployer_private_key.value
+      DEPLOYER_PRIVATE_KEY = var.deployer_private_key
     }
   }
 }
@@ -36,22 +27,6 @@ resource "aws_iam_role" "lambda_exec" {
 resource "aws_iam_role_policy_attachment" "lambda_basic" {
   role       = aws_iam_role.lambda_exec.name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
-}
-
-# Allow Lambda to read its SSM secrets
-resource "aws_iam_role_policy" "lambda_ssm" {
-  name = "lambda_ssm_read"
-  role = aws_iam_role.lambda_exec.id
-  policy = jsonencode({
-    Version = "2012-10-17",
-    Statement = [{
-      Effect   = "Allow",
-      Action   = ["ssm:GetParameter"],
-      Resource = [
-        "arn:aws:ssm:us-east-2:*:parameter/blockchain-cicd/*"
-      ]
-    }]
-  })
 }
 
 resource "aws_ecr_repository_policy" "lambda_pull" {

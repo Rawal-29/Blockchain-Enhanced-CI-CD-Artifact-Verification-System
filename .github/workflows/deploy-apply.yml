@@ -124,6 +124,9 @@ jobs:
 
       - name: Terraform Apply
         working-directory: ${{ env.TF_WORKING_DIR }}
+        env:
+          TF_VAR_ethereum_rpc_url: ${{ secrets.ETHEREUM_RPC_URL }}
+          TF_VAR_deployer_private_key: ${{ secrets.DEPLOYER_PRIVATE_KEY }}
         run: terraform apply -auto-approve tfplan.binary
 
       - name: Publish Artifacts & Dashboard
