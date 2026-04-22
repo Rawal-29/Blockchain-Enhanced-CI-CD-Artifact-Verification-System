@@ -1,3 +1,17 @@
+# H3: DynamoDB table required for Terraform state locking (referenced in providers.tf backend)
+resource "aws_dynamodb_table" "terraform_lock" {
+  name         = "blockchain-terraform-lock"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "LockID"
+
+  attribute {
+    name = "LockID"
+    type = "S"
+  }
+
+  tags = { Project = "BlockCICD", Purpose = "TerraformStateLock" }
+}
+
 resource "aws_s3_bucket" "artifact_bucket" {
   bucket_prefix = "blockchain-artifacts-"
   tags = { Project = "BlockCICD", Type = "Artifacts" }
@@ -26,7 +40,6 @@ resource "aws_s3_bucket_website_configuration" "website_config" {
   index_document { suffix = "index.html" }
 }
 
-
 resource "aws_s3_bucket_public_access_block" "block_public_read" {
   bucket = aws_s3_bucket.website_bucket.id
   block_public_acls       = false
@@ -51,4 +64,3 @@ resource "aws_s3_bucket_policy" "public_read" {
   })
   depends_on = [aws_s3_bucket_public_access_block.block_public_read]
 }
-
