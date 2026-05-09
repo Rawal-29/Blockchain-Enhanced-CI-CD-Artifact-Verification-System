@@ -8,10 +8,8 @@ resource "aws_lambda_function" "api" {
 
   environment {
     variables = {
-      # C9: secrets passed via TF_VAR_ env vars from GitHub Actions secrets at plan/apply time
-      ETHEREUM_RPC_URL     = var.ethereum_rpc_url
-      CONTRACT_ADDRESS     = var.contract_address
-      DEPLOYER_PRIVATE_KEY = var.deployer_private_key
+      # Secrets injected at runtime via container environment; only static config here
+      CONTRACT_ADDRESS = var.contract_address
     }
   }
 }
