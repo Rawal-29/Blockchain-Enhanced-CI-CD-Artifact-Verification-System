@@ -1,0 +1,248 @@
+name: "ChatOps"
+
+on:
+  issue_comment:
+    types: [created]
+
+env:
+  AWS_REGION: "us-east-2"
+  TF_STATE_BUCKET: "rawal-cicd-terraform-state-2026"
+  TF_WORKING_DIR: "./infrastructure"
+  GHCR_REGISTRY: "ghcr.io"
+  IMAGE_NAME: "ghcr.io/rawal-29/blockchain-cicd-api"
+
+permissions:
+  id-token: write
+  contents: read
+  pull-requests: write
+  packages: write
+
+jobs:
+  # ─── /tfplan ───────────────────────────────────────────────────────────────
+  tfplan:
+    name: "Terraform Plan"
+    if: >-
+      github.event.issue.pull_request &&
+      startsWith(github.event.comment.body, '/tfplan') &&
+      contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Reject Fork PRs
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pr = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.issue.number,
+            });
+            if (pr.data.head.repo.fork) {
+              core.setFailed('Security: /tfplan not permitted on fork PRs.');
+            }
+
+      - name: Get PR Branch
+        uses: xt0rted/pull-request-comment-branch@v2
+        id: branch
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.branch.outputs.head_sha }}
+
+      - name: Configure AWS Credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+
+      - name: Terraform Init
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: terraform init
+
+      - name: Terraform Plan
+        id: plan
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: terraform plan -out=tfplan.binary
+
+      - name: Generate JSON Plan
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: terraform show -json tfplan.binary > tfplan.json
+
+      - name: Compute Plan Hash
+        id: hash
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: |
+          PLAN_HASH=$(sha256sum tfplan.json | awk '{print $1}')
+          echo "plan_hash=$PLAN_HASH" >> "$GITHUB_OUTPUT"
+
+      - name: Upload Plan to S3
+        run: |
+          PLAN_HASH="${{ steps.hash.outputs.plan_hash }}"
+          PR_NUM="${{ github.event.issue.number }}"
+          aws s3 cp ${{ env.TF_WORKING_DIR }}/tfplan.json \
+            "s3://${{ env.TF_STATE_BUCKET }}/plans/${PLAN_HASH}.json"
+          aws s3 cp ${{ env.TF_WORKING_DIR }}/tfplan.binary \
+            "s3://${{ env.TF_STATE_BUCKET }}/plans/${PLAN_HASH}.binary"
+          printf '%s' "${PLAN_HASH}" | \
+            aws s3 cp - "s3://${{ env.TF_STATE_BUCKET }}/plans/pr-${PR_NUM}.ref"
+
+      - name: Convert Plan to Text
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: terraform show -no-color tfplan.binary > plan.txt
+
+      - name: Post Plan to PR
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const plan = fs.readFileSync('${{ env.TF_WORKING_DIR }}/plan.txt', 'utf8');
+            const planHash = '${{ steps.hash.outputs.plan_hash }}';
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `### ✅ Terraform Plan\n**Plan Hash:** \`${planHash}\`\n<details><summary>Show Plan</summary>\n\`\`\`hcl\n${plan.slice(0, 65000)}\n\`\`\`\n</details>`
+            });
+
+  # ─── /tfregister ───────────────────────────────────────────────────────────
+  tfregister:
+    name: "Register Artifact on Gelato/Sepolia"
+    if: >-
+      github.event.issue.pull_request &&
+      startsWith(github.event.comment.body, '/tfregister') &&
+      contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Reject Fork PRs
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pr = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.issue.number,
+            });
+            if (pr.data.head.repo.fork) {
+              core.setFailed('Security: /tfregister not permitted on fork PRs.');
+            }
+
+      - name: Get PR Branch
+        uses: xt0rted/pull-request-comment-branch@v2
+        id: branch
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.branch.outputs.head_sha }}
+
+      - name: Configure AWS Credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Fetch Approved Plan from S3
+        id: fetch
+        run: |
+          PR_NUM="${{ github.event.issue.number }}"
+          PLAN_HASH=$(aws s3 cp "s3://${{ env.TF_STATE_BUCKET }}/plans/pr-${PR_NUM}.ref" -)
+          echo "plan_hash=$PLAN_HASH" >> "$GITHUB_OUTPUT"
+          aws s3 cp "s3://${{ env.TF_STATE_BUCKET }}/plans/${PLAN_HASH}.json" tfplan.json
+
+      - name: Compute SHA256 of Plan
+        id: hash
+        run: |
+          ARTIFACT_HASH=$(sha256sum tfplan.json | awk '{print $1}')
+          echo "artifact_hash=$ARTIFACT_HASH" >> "$GITHUB_OUTPUT"
+
+      - name: Register Artifact via Microservice
+        id: register
+        run: |
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "${{ secrets.ARTIFACT_API_URL }}/api/v1/register-artifact" \
+            -H "Content-Type: application/json" \
+            -d "{\"artifact_name\": \"tfplan-pr-${{ github.event.issue.number }}\", \"artifact_sha256\": \"${{ steps.hash.outputs.artifact_hash }}\"}")
+          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+          BODY=$(echo "$RESPONSE" | head -1)
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "Registration failed (HTTP $HTTP_CODE): $BODY"
+            exit 1
+          fi
+          TASK_ID=$(echo "$BODY" | python3 -c "import sys,json; print(json.load(sys.stdin)['gelato_task_id'])")
+          echo "task_id=$TASK_ID" >> "$GITHUB_OUTPUT"
+
+      - name: Post Result to PR
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `### ⛓️ Artifact Anchored on Sepolia\n**SHA256:** \`${{ steps.hash.outputs.artifact_hash }}\`\n**Gelato Task ID:** \`${{ steps.register.outputs.task_id }}\`\n\nVerify status: https://relay.gelato.digital/tasks/status/${{ steps.register.outputs.task_id }}`
+            });
+
+  # ─── /create_image ─────────────────────────────────────────────────────────
+  create_image:
+    name: "Build & Push to GHCR"
+    if: >-
+      github.event.issue.pull_request &&
+      startsWith(github.event.comment.body, '/create_image') &&
+      contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Reject Fork PRs
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pr = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.issue.number,
+            });
+            if (pr.data.head.repo.fork) {
+              core.setFailed('Security: /create_image not permitted on fork PRs.');
+            }
+
+      - name: Get PR Branch
+        uses: xt0rted/pull-request-comment-branch@v2
+        id: branch
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.branch.outputs.head_sha }}
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.GHCR_REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GHCR_PAT }}
+
+      - name: Build and Push Image
+        id: build
+        env:
+          IMAGE_TAG: ${{ steps.branch.outputs.head_sha }}
+        run: |
+          docker build -t ${{ env.IMAGE_NAME }}:${IMAGE_TAG} .
+          docker push ${{ env.IMAGE_NAME }}:${IMAGE_TAG}
+          echo "image_tag=$IMAGE_TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Post Result to PR
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `### 🐳 Image Published\n**Registry:** \`${{ env.IMAGE_NAME }}:${{ steps.build.outputs.image_tag }}\`\n\nPull: \`docker pull ${{ env.IMAGE_NAME }}:${{ steps.build.outputs.image_tag }}\``
+            });
