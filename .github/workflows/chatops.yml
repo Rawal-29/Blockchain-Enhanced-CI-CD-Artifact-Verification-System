@@ -64,7 +64,7 @@ jobs:
       - name: Terraform Plan
         id: plan
         working-directory: ${{ env.TF_WORKING_DIR }}
-        run: terraform plan -out=tfplan.binary
+        run: terraform plan -lock=false -out=tfplan.binary
 
       - name: Generate JSON Plan
         working-directory: ${{ env.TF_WORKING_DIR }}
