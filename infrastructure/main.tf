@@ -1,15 +1,3 @@
-# GitHub Actions OIDC provider — enables keyless auth via id-token: write
-resource "aws_iam_openid_connect_provider" "github_actions" {
-  url             = "https://token.actions.githubusercontent.com"
-  client_id_list  = ["sts.amazonaws.com"]
-  # Thumbprints for token.actions.githubusercontent.com (primary + backup)
-  thumbprint_list = [
-    "6938fd4d98bab03faadb97b34396831e3780aea1",
-    "1c58a3a8518e8759bf075b76b750d4f2df264fcd"
-  ]
-  tags = { Project = "BlockCICD", Purpose = "GitHubActionsOIDC" }
-}
-
 resource "aws_s3_bucket" "artifact_bucket" {
   bucket_prefix = "blockchain-artifacts-"
   tags          = { Project = "BlockCICD", Type = "Artifacts" }
