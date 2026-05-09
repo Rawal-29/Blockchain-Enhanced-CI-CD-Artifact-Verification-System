@@ -1,0 +1,38 @@
+name: "Terraform Force Unlock"
+
+on:
+  workflow_dispatch:
+    inputs:
+      lock_id:
+        description: "Terraform lock ID to force-unlock"
+        required: true
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  force-unlock:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: us-east-2
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+
+      - name: Terraform Init
+        working-directory: ./infrastructure
+        run: terraform init
+
+      - name: Force Unlock
+        working-directory: ./infrastructure
+        run: terraform force-unlock -force "${{ github.event.inputs.lock_id }}"
