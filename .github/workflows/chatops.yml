@@ -154,19 +154,29 @@ jobs:
           ARTIFACT_HASH=$(sha256sum tfplan.json | awk '{print $1}')
           echo "artifact_hash=$ARTIFACT_HASH" >> "$GITHUB_OUTPUT"
 
-      - name: Register Artifact via Microservice
+      - name: Relay Artifact Hash to Gelato/Sepolia
         id: register
+        env:
+          GELATO_API_KEY: ${{ secrets.GELATO_API_KEY }}
+          CONTRACT_ADDRESS: ${{ secrets.CONTRACT_ADDRESS }}
+          ARTIFACT_HASH: ${{ steps.hash.outputs.artifact_hash }}
         run: |
-          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "${{ secrets.ARTIFACT_API_URL }}/api/v1/register-artifact" \
+          # storeHash(bytes32) selector = 0x8f7cef42
+          # ABI encoding: selector (4 bytes) + bytes32 hash value (32 bytes, already 64 hex chars)
+          SELECTOR="8f7cef42"
+          CALL_DATA="0x${SELECTOR}${ARTIFACT_HASH}"
+          echo "Relaying hash to Gelato Relay (Sepolia, chainId=11155111)..."
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "https://relay.gelato.digital/relays/v2/sponsored-call" \
             -H "Content-Type: application/json" \
-            -d "{\"artifact_name\": \"tfplan-pr-${{ github.event.issue.number }}\", \"artifact_sha256\": \"${{ steps.hash.outputs.artifact_hash }}\"}")
+            -d "{\"chainId\": 11155111, \"target\": \"${CONTRACT_ADDRESS}\", \"data\": \"${CALL_DATA}\", \"sponsorApiKey\": \"${GELATO_API_KEY}\"}")
           HTTP_CODE=$(echo "$RESPONSE" | tail -1)
           BODY=$(echo "$RESPONSE" | head -1)
-          if [ "$HTTP_CODE" != "200" ]; then
-            echo "Registration failed (HTTP $HTTP_CODE): $BODY"
+          echo "Gelato response (HTTP ${HTTP_CODE}): ${BODY}"
+          if [ "$HTTP_CODE" != "201" ] && [ "$HTTP_CODE" != "200" ]; then
+            echo "Gelato relay failed"
             exit 1
           fi
-          TASK_ID=$(echo "$BODY" | python3 -c "import sys,json; print(json.load(sys.stdin)['gelato_task_id'])")
+          TASK_ID=$(echo "$BODY" | python3 -c "import sys,json; print(json.load(sys.stdin).get('taskId','unknown'))")
           echo "task_id=$TASK_ID" >> "$GITHUB_OUTPUT"
 
       - name: Post Result to PR
