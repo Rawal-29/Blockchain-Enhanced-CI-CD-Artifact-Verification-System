@@ -18,13 +18,9 @@ permissions:
   packages: write
 
 jobs:
-  # ─── /tfplan ───────────────────────────────────────────────────────────────
   tfplan:
     name: "Terraform Plan"
-    if: >-
-      github.event.issue.pull_request &&
-      startsWith(github.event.comment.body, '/tfplan') &&
-      contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)
+    if: "github.event.issue.pull_request != '' && startsWith(github.event.comment.body, '/tfplan') && contains(fromJSON('[\"OWNER\",\"MEMBER\",\"COLLABORATOR\"]'), github.event.comment.author_association)"
     runs-on: ubuntu-latest
 
     steps:
@@ -85,9 +81,9 @@ jobs:
         run: |
           PLAN_HASH="${{ steps.hash.outputs.plan_hash }}"
           PR_NUM="${{ github.event.issue.number }}"
-          aws s3 cp ${{ env.TF_WORKING_DIR }}/tfplan.json \
+          aws s3 cp "${{ env.TF_WORKING_DIR }}/tfplan.json" \
             "s3://${{ env.TF_STATE_BUCKET }}/plans/${PLAN_HASH}.json"
-          aws s3 cp ${{ env.TF_WORKING_DIR }}/tfplan.binary \
+          aws s3 cp "${{ env.TF_WORKING_DIR }}/tfplan.binary" \
             "s3://${{ env.TF_STATE_BUCKET }}/plans/${PLAN_HASH}.binary"
           printf '%s' "${PLAN_HASH}" | \
             aws s3 cp - "s3://${{ env.TF_STATE_BUCKET }}/plans/pr-${PR_NUM}.ref"
@@ -107,16 +103,12 @@ jobs:
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: `### ✅ Terraform Plan\n**Plan Hash:** \`${planHash}\`\n<details><summary>Show Plan</summary>\n\`\`\`hcl\n${plan.slice(0, 65000)}\n\`\`\`\n</details>`
+              body: `### Terraform Plan\n**Plan Hash:** \`${planHash}\`\n<details><summary>Show Plan</summary>\n\`\`\`hcl\n${plan.slice(0, 65000)}\n\`\`\`\n</details>`
             });
 
-  # ─── /tfregister ───────────────────────────────────────────────────────────
   tfregister:
     name: "Register Artifact on Gelato/Sepolia"
-    if: >-
-      github.event.issue.pull_request &&
-      startsWith(github.event.comment.body, '/tfregister') &&
-      contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)
+    if: "github.event.issue.pull_request != '' && startsWith(github.event.comment.body, '/tfregister') && contains(fromJSON('[\"OWNER\",\"MEMBER\",\"COLLABORATOR\"]'), github.event.comment.author_association)"
     runs-on: ubuntu-latest
 
     steps:
@@ -185,16 +177,12 @@ jobs:
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: `### ⛓️ Artifact Anchored on Sepolia\n**SHA256:** \`${{ steps.hash.outputs.artifact_hash }}\`\n**Gelato Task ID:** \`${{ steps.register.outputs.task_id }}\`\n\nVerify status: https://relay.gelato.digital/tasks/status/${{ steps.register.outputs.task_id }}`
+              body: `### Artifact Anchored on Sepolia\n**SHA256:** \`${{ steps.hash.outputs.artifact_hash }}\`\n**Gelato Task ID:** \`${{ steps.register.outputs.task_id }}\`\n\nVerify: https://relay.gelato.digital/tasks/status/${{ steps.register.outputs.task_id }}`
             });
 
-  # ─── /create_image ─────────────────────────────────────────────────────────
   create_image:
     name: "Build & Push to GHCR"
-    if: >-
-      github.event.issue.pull_request &&
-      startsWith(github.event.comment.body, '/create_image') &&
-      contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)
+    if: "github.event.issue.pull_request != '' && startsWith(github.event.comment.body, '/create_image') && contains(fromJSON('[\"OWNER\",\"MEMBER\",\"COLLABORATOR\"]'), github.event.comment.author_association)"
     runs-on: ubuntu-latest
 
     steps:
@@ -232,8 +220,8 @@ jobs:
         env:
           IMAGE_TAG: ${{ steps.branch.outputs.head_sha }}
         run: |
-          docker build -t ${{ env.IMAGE_NAME }}:${IMAGE_TAG} .
-          docker push ${{ env.IMAGE_NAME }}:${IMAGE_TAG}
+          docker build -t "${{ env.IMAGE_NAME }}:${IMAGE_TAG}" .
+          docker push "${{ env.IMAGE_NAME }}:${IMAGE_TAG}"
           echo "image_tag=$IMAGE_TAG" >> "$GITHUB_OUTPUT"
 
       - name: Post Result to PR
@@ -244,5 +232,5 @@ jobs:
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: `### 🐳 Image Published\n**Registry:** \`${{ env.IMAGE_NAME }}:${{ steps.build.outputs.image_tag }}\`\n\nPull: \`docker pull ${{ env.IMAGE_NAME }}:${{ steps.build.outputs.image_tag }}\``
+              body: `### Image Published\n**Registry:** \`${{ env.IMAGE_NAME }}:${{ steps.build.outputs.image_tag }}\`\n\nPull: \`docker pull ${{ env.IMAGE_NAME }}:${{ steps.build.outputs.image_tag }}\``
             });
