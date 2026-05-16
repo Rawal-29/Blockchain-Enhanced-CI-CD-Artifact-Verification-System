@@ -154,7 +154,7 @@ jobs:
           ARTIFACT_HASH=$(sha256sum tfplan.json | awk '{print $1}')
           echo "artifact_hash=$ARTIFACT_HASH" >> "$GITHUB_OUTPUT"
 
-      - name: Relay Artifact Hash to Gelato/Arbitrum
+      - name: Relay Artifact Hash to Gelato/Sepolia
         id: register
         env:
           GELATO_API_KEY: ${{ secrets.GELATO_API_KEY }}
@@ -162,7 +162,7 @@ jobs:
           ARTIFACT_HASH: ${{ steps.hash.outputs.artifact_hash }}
         run: |
           if [ -z "${CONTRACT_ADDRESS}" ]; then
-            echo "ERROR: CONTRACT_ADDRESS secret is not set. Deploy BlockCICD.sol to Arbitrum One and set the secret."
+            echo "ERROR: CONTRACT_ADDRESS secret is not set. Deploy BlockCICD.sol to Sepolia and set the secret."
             exit 1
           fi
           if [ -z "${GELATO_API_KEY}" ]; then
@@ -170,15 +170,14 @@ jobs:
             exit 1
           fi
           # storeHash(bytes32) selector = 0x8f7cef42
-          # Gelato sponsored-call only supports chainId 42161 (Arbitrum One)
           SELECTOR="8f7cef42"
           CALL_DATA="0x${SELECTOR}${ARTIFACT_HASH}"
-          echo "Relaying hash to Gelato Relay (Arbitrum One, chainId=42161)..."
+          echo "Relaying hash to Gelato Relay (Sepolia, chainId=11155111)..."
           echo "Target contract: ${CONTRACT_ADDRESS}"
           echo "Artifact hash:   ${ARTIFACT_HASH}"
           RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "https://relay.gelato.digital/relays/v2/sponsored-call" \
             -H "Content-Type: application/json" \
-            -d "{\"chainId\": 42161, \"target\": \"${CONTRACT_ADDRESS}\", \"data\": \"${CALL_DATA}\", \"sponsorApiKey\": \"${GELATO_API_KEY}\"}")
+            -d "{\"chainId\": 11155111, \"target\": \"${CONTRACT_ADDRESS}\", \"data\": \"${CALL_DATA}\", \"sponsorApiKey\": \"${GELATO_API_KEY}\"}")
           HTTP_CODE=$(echo "$RESPONSE" | tail -1)
           BODY=$(echo "$RESPONSE" | head -1)
           echo "Gelato response (HTTP ${HTTP_CODE}): ${BODY}"
@@ -197,7 +196,7 @@ jobs:
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: `### Artifact Anchored on Arbitrum One\n**SHA256:** \`${{ steps.hash.outputs.artifact_hash }}\`\n**Gelato Task ID:** \`${{ steps.register.outputs.task_id }}\`\n\nVerify: https://relay.gelato.digital/tasks/status/${{ steps.register.outputs.task_id }}`
+              body: `### Artifact Anchored on Sepolia\n**SHA256:** \`${{ steps.hash.outputs.artifact_hash }}\`\n**Gelato Task ID:** \`${{ steps.register.outputs.task_id }}\`\n\nVerify: https://relay.gelato.digital/tasks/status/${{ steps.register.outputs.task_id }}`
             });
 
   create_image:
