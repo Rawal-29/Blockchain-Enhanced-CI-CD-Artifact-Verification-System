@@ -67,6 +67,9 @@ async def register_artifact(req: ArtifactRequest):
         "sponsorApiKey": gelato_api_key,
     }
 
+    print(f"[DEBUG] Gelato chainId: {payload['chainId']}")
+    print(f"[DEBUG] Gelato target: {payload['target']}")
+    print(f"[DEBUG] API Key start: {gelato_api_key[:5]}")
     async with httpx.AsyncClient(timeout=30) as client:
         resp = await client.post(GELATO_RELAY_URL, json=payload)
         if resp.status_code != 201:
