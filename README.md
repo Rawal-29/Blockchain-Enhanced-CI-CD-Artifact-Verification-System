@@ -1,170 +1,82 @@
+# BlockCI/CD
 
-# 🛡️ Blockchain-Enhanced CI/CD Artifact Verification System
+### Decentralized Artifact Provenance for Zero-Trust Infrastructure Pipelines
 
-
-![Terraform](https://img.shields.io/badge/IaC-Terraform-purple)
-![Blockchain](https://img.shields.io/badge/Ethereum-Sepolia-gray)
-![AWS](https://img.shields.io/badge/Cloud-AWS-orange)
-![Build Status](https://img.shields.io/badge/build-passing-brightgreen)
-
-> **"Trust, but Verify."** — An immutable security layer for modern DevOps pipelines.
+<img src="http://googleusercontent.com/image_generation_content/0" width="100%" alt="BlockCI/CD Architecture Diagram">
 
 ---
 
-## 📖 Project Description
+## Overview
 
-The **Blockchain-Enhanced CI/CD Artifact Verification System** is a security-first DevOps tool designed to prevent **Supply Chain Attacks** and **Insider Threats** in infrastructure deployments.
+**BlockCI/CD** is a blockchain-anchored CI/CD security layer that cryptographically eliminates the possibility of unauthorized infrastructure changes reaching production. Every Terraform execution plan is hashed, anchored to an immutable Ethereum smart contract on Sepolia, and verified on-chain before `terraform apply` is permitted to execute.
 
-In traditional CI/CD pipelines, there is a "blind spot" between the moment code is approved (Plan) and the moment it is deployed (Apply). A malicious actor or compromised runner could modify the deployment artifact during this window without detection.
-
-**This project solves that problem** by anchoring the integrity of every Terraform Plan to the **Ethereum Blockchain**. By creating an immutable, tamper-proof "fingerprint" (hash) of our infrastructure code, we ensure that **no unapproved code can ever be deployed to production**.
-
-### 🌟 Key Benefits
-* **Immutable Audit Trail:** Every deployment is permanently recorded on the blockchain.
-* **Tamper-Proof:** If a single byte of the plan changes post-approval, deployment is strictly blocked.
-* **Zero-Knowledge Verification:** Verify file integrity without exposing sensitive file contents.
-* **Public Transparency:** External auditors or teams can verify artifacts via a public API.
-* **Smart Contract Rewards:** Minters (Deployers) receive **DevOps Trust Tokens (DTT)** upon successful registration.
+No trusted intermediary. No mutable audit log. No attack surface between review and deployment.
 
 ---
 
-## 🏗️ Architecture Overview
+## How It Works
 
-The system follows a strictly defined **"Sign-then-Verify"** workflow using **ChatOps**.
+### 1. The Write Path — Propose & Lock
 
-```mermaid
-sequenceDiagram
-    participant Dev as Developer
-    participant GH as GitHub Actions
-    participant BC as Ethereum Blockchain
-    participant AWS as AWS Cloud
-    
-    Note over Dev, AWS: Phase 1: Registration (ChatOps)
-    Dev->>GH: Open PR & Comment "/tfplan"
-    GH->>GH: Generate Terraform Plan
-    GH->>GH: Calculate SHA256 Hash
-    GH->>BC: Register Hash (Write Transaction)
-    BC-->>GH: Confirmed (Mint DTT Token)
-    
-    Note over Dev, AWS: Phase 2: Verification (Deploy)
-    Dev->>GH: Merge PR to Main
-    GH->>GH: Download Plan Artifact
-    GH->>GH: Calculate Hash Again
-    GH->>BC: Verify Hash (Read Call)
-    alt Hash Matches
-        BC-->>GH: ✅ Verified
-        GH->>AWS: Terraform Apply (Deploy Infra)
-    else Hash Mismatch
-        BC-->>GH: ❌ Unknown Hash
-        GH->>GH: CRITICAL FAILURE (Stop Deploy)
-    end
-````
+A developer opens a Pull Request targeting `main`. A reviewer triggers the ChatOps pipeline by commenting directly on the PR:
 
------
+- **`/tfplan`** — The runner executes `terraform plan`, serializes the binary and JSON output, computes a deterministic SHA256 fingerprint, and archives all artifacts to an isolated S3 state bucket keyed by PR number. The plan hash is posted as a PR comment for audit visibility.
+- **`/tfregister`** — The runner invokes `scripts/anchor_hash.py`, which constructs a raw `storeHash(bytes32)` transaction, signs it with the infrastructure wallet's private key, and broadcasts it to the `BlockCICD` smart contract on the Ethereum Sepolia testnet via `eth_sendRawTransaction`. The transaction hash and Etherscan verification link are posted back to the PR.
 
-## 📂 Folder Structure
+At this point, the SHA256 of the approved plan is **permanently and immutably recorded on-chain**. It cannot be altered, deleted, or forged.
 
-```bash
-├── .github/workflows/      # CI/CD Pipelines (ChatOps & Deploy)
-├── contracts/              # Solidity Smart Contracts (BlockCICD.sol)
-├── dashboard/              # Static HTML/JS for Audit Dashboard
-├── infrastructure/         # Terraform IaC configurations
-│   ├── main.tf             # Core AWS resources (S3, Policies)
-│   ├── lambda.tf           # API Function definitions
-│   ├── variables.tf        # Input variables
-│   └── output.tf           # API URL & Bucket outputs
-├── scripts/                # Python Automation Scripts
-│   ├── deploy_contract.py  # Deploys contract to Sepolia
-│   ├── tf_guard.py         # Handles Register/Verify logic
-│   └── simulate_hack.sh    # Integrity attack simulation
-├── src/                    # API Source Code (FastAPI)
-│   ├── main.py             # App Entry Point
-│   ├── routes/             # API Endpoints
-│   └── core/               # Blockchain Logic
-├── Dockerfile.lambda       # Container definition for API
-└── README.md               # Project Documentation
-```
+### 2. The Read Path — Verify & Deploy
 
------
+When the PR is merged into `main`, the `deploy.yml` pipeline triggers automatically:
 
-## ⚙️ Installation & Setup
+1. Resolves the originating PR number from the raw merge commit SHA via `gh api`.
+2. Fetches the exact `tfplan.binary` and `tfplan.json` from S3 using the stored plan reference.
+3. Recomputes the SHA256 fingerprint of the downloaded plan.
+4. Calls `cast call` (Foundry) to invoke `verifyHash(bytes32)` on the on-chain registry.
+5. If the contract returns `true` → `terraform apply` proceeds.
+6. If the contract returns `false` → the pipeline exits with a `CRITICAL SECURITY FAILURE` and deployment is permanently blocked.
 
-### Prerequisites
+### 3. The Security Guarantee
 
-1.  **AWS Account** with permissions to manage S3, Lambda, and IAM.
-2.  **Ethereum Wallet** (MetaMask) with Sepolia Testnet ETH.
-3.  **GitHub Repository** for hosting the code.
-4.  **Terraform CLI** installed locally (optional).
+This architecture eliminates **Time-of-Check to Time-of-Use (TOCTOU)** attacks — the class of vulnerability where infrastructure code is reviewed and approved, then silently modified between approval and execution. Because the gate re-derives the hash from the artifact and verifies it against an immutable on-chain record, no in-flight mutation can survive the verification step.
 
-### 1\. Clone Repository
+The system enforces a **Zero-Trust deployment perimeter**: the blockchain is the sole authority. No human, no CI/CD runner, and no privileged process can bypass it without the cryptographic proof of prior approval.
 
-```bash
-git clone [https://github.com/your-username/blockchain-cicd-verification.git](https://github.com/your-username/blockchain-cicd-verification.git)
-cd blockchain-cicd-verification
-```
+---
 
-### 2\. Configure GitHub Secrets
+## Repository Component Matrix
 
-Add the following secrets to your Repository (**Settings \> Secrets \> Actions**):
+| Path | Description |
+|---|---|
+| [`.github/workflows/`](.github/workflows/README.md) | GitOps CI/CD Automation Orchestration |
+| [`scripts/`](scripts/README.md) | Web3 Signing & Broadcasting Engine |
+| [`contracts/`](contracts/README.md) | Immutable Ledger Smart Contract Spec |
+| [`infrastructure/`](infrastructure/README.md) | Infrastructure-as-Code (Terraform) Base & Backends |
 
-| Secret Name | Description |
-| :--- | :--- |
-| `AWS_ROLE_ARN` | The IAM Role ARN for GitHub Actions to assume. |
-| `ETHEREUM_RPC_URL` | Your Infura or Alchemy Sepolia Endpoint. |
-| `DEPLOYER_PRIVATE_KEY` | Private Key of the wallet used to deploy contracts. |
+---
 
-### 3\. Deploy
+## Tech Stack
 
-The pipeline is self-bootstrapping. Push to `main` to trigger the initial deployment.
+| Layer | Technology |
+|---|---|
+| Infrastructure | Terraform, AWS (S3, SQS, SNS, Lambda) |
+| Blockchain | Solidity 0.8.20, Ethereum Sepolia Testnet |
+| Web3 Client | Python `web3.py` |
+| On-Chain Verification | Foundry `cast call` |
+| CI/CD Orchestration | GitHub Actions (ChatOps + OIDC) |
+| State Backend | AWS S3 |
 
-```bash
-git push origin main
-```
+---
 
------
+## Prerequisites
 
-## 🔐 Environment Variables
+- AWS account with OIDC role configured for GitHub Actions
+- Ethereum Sepolia RPC endpoint (Alchemy or Infura)
+- Deployed `BlockCICD.sol` contract address
+- GitHub repository secrets: `ETHEREUM_RPC_URL`, `DEPLOYER_PRIVATE_KEY`, `CONTRACT_ADDRESS`, `AWS_ROLE_ARN`
 
-These variables are used by the Python scripts and Terraform.
+---
 
-  * `ETHEREUM_RPC_URL`: Connection string for the blockchain node.
-  * `DEPLOYER_PRIVATE_KEY`: **(Sensitive)** Used to sign transactions.
-  * `CONTRACT_ADDRESS`: Automatically populated in `infrastructure/terraform.auto.tfvars`.
-  * `TF_STATE_BUCKET`: S3 bucket for Terraform state.
+## License
 
------
-
-## 🚀 Usage Instructions
-
-### 1\. ChatOps Workflow (Developer)
-
-1.  Create a Pull Request.
-2.  Comment: `/tfplan`.
-3.  The bot generates a plan and registers the hash on-chain.
-4.  Comment: `/create_image` (Optional) to build the Docker image.
-
-### 2\. Deployment
-
-1.  Merge the Pull Request.
-2.  The pipeline verifies the plan hash against the blockchain.
-3.  If verified, infrastructure is applied.
-
-### 3\. Verification API
-
-External teams can verify artifacts using the public Lambda API:
-
-```bash
-curl -X POST https://<your-api-url>/api/verify/artifact \
-     -H "Content-Type: application/json" \
-     -d '{"hash": "0x..."}'
-```
-
------
-
-## 🤝 Contributing
-
-1.  Fork the repo.
-2.  Create a feature branch.
-3.  **Important:** Run `/tfplan` in your PR to register your changes.
-4.  Merge.
-
+MIT
