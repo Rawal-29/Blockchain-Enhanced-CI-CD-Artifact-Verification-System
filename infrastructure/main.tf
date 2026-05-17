@@ -57,3 +57,12 @@ resource "aws_s3_bucket" "pipeline_test_bucket" {
     Pipeline    = "ChatOps-End-To-End"
   }
 }
+
+resource "aws_s3_bucket" "native_web3_test_bucket" {
+  bucket = "rawal-cicd-native-web3-test-bucket-2026"
+
+  tags = {
+    Environment = "Testing"
+    Pipeline    = "ChatOps-E2E"
+  }
+}

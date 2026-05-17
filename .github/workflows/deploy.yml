@@ -1,0 +1,109 @@
+name: "Deploy"
+
+on:
+  push:
+    branches: [main]
+
+env:
+  AWS_REGION: "us-east-2"
+  TF_STATE_BUCKET: "rawal-cicd-terraform-state-2026"
+  TF_WORKING_DIR: "./infrastructure"
+
+permissions:
+  id-token: write
+  contents: read
+  pull-requests: read
+
+jobs:
+  deploy:
+    name: "Web3-Verified Terraform Deploy"
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Resolve Merged PR Number
+        id: pr
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          PR_NUM=$(gh api "repos/${{ github.repository }}/commits/${{ github.sha }}/pulls" \
+            --jq '.[0].number')
+          if [ -z "$PR_NUM" ] || [ "$PR_NUM" = "null" ]; then
+            echo "ERROR: Could not resolve merged PR number from commit ${{ github.sha }}"
+            exit 1
+          fi
+          echo "pr_number=$PR_NUM" >> "$GITHUB_OUTPUT"
+          echo "Merged PR: #${PR_NUM}"
+
+      - name: Fetch Approved Plan from S3
+        id: fetch
+        run: |
+          PR_NUM="${{ steps.pr.outputs.pr_number }}"
+          PLAN_HASH=$(aws s3 cp "s3://${{ env.TF_STATE_BUCKET }}/plans/pr-${PR_NUM}.ref" -)
+          if [ -z "$PLAN_HASH" ]; then
+            echo "ERROR: No approved plan ref found for PR #${PR_NUM}. Run /tfregister before merging."
+            exit 1
+          fi
+          echo "plan_hash=$PLAN_HASH" >> "$GITHUB_OUTPUT"
+          echo "Plan hash: ${PLAN_HASH}"
+          aws s3 cp "s3://${{ env.TF_STATE_BUCKET }}/plans/${PLAN_HASH}.json" tfplan.json
+          aws s3 cp "s3://${{ env.TF_STATE_BUCKET }}/plans/${PLAN_HASH}.binary" \
+            "${{ env.TF_WORKING_DIR }}/tfplan.binary"
+
+      - name: Calculate Plan Hash
+        id: hash
+        run: |
+          ARTIFACT_HASH=$(sha256sum tfplan.json | awk '{print $1}')
+          echo "artifact_hash=$ARTIFACT_HASH" >> "$GITHUB_OUTPUT"
+          echo "Computed hash: ${ARTIFACT_HASH}"
+          if [ "${ARTIFACT_HASH}" != "${{ steps.fetch.outputs.plan_hash }}" ]; then
+            echo "ERROR: Downloaded plan hash does not match S3 ref. Possible tampering."
+            exit 1
+          fi
+          echo "Hash integrity check passed."
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+
+      - name: Verify Plan Hash on Blockchain
+        env:
+          ETHEREUM_RPC_URL: ${{ secrets.ETHEREUM_RPC_URL }}
+          CONTRACT_ADDRESS: ${{ secrets.CONTRACT_ADDRESS }}
+          ARTIFACT_HASH: ${{ steps.hash.outputs.artifact_hash }}
+        run: |
+          echo "Querying BlockCICD contract on Sepolia..."
+          echo "Contract: ${CONTRACT_ADDRESS}"
+          echo "Hash:     ${ARTIFACT_HASH}"
+          RESULT=$(cast call "${CONTRACT_ADDRESS}" \
+            "verifyHash(bytes32)(bool)" \
+            "0x${ARTIFACT_HASH}" \
+            --rpc-url "${ETHEREUM_RPC_URL}")
+          echo "On-chain result: ${RESULT}"
+          if [ "${RESULT}" = "true" ]; then
+            echo "SECURITY CHECK PASSED: Plan hash verified on Sepolia."
+          else
+            echo "CRITICAL SECURITY FAILURE: Plan hash not found on blockchain."
+            echo "This plan was not approved via /tfregister. Aborting deployment."
+            exit 1
+          fi
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+
+      - name: Terraform Init
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: terraform init
+
+      - name: Terraform Apply
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: terraform apply -auto-approve tfplan.binary
