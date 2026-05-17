@@ -50,10 +50,11 @@ tx = contract.functions.storeHash(hash_bytes32).build_transaction({
     "nonce": w3.eth.get_transaction_count(account.address),
     "gasPrice": w3.eth.gas_price,
     "chainId": w3.eth.chain_id,
+    "gas": 100000,
 })
 
 signed = w3.eth.account.sign_transaction(tx, private_key=PRIVATE_KEY)
-tx_hash = w3.eth.send_raw_transaction(signed.raw_transaction)
+tx_hash = w3.eth.send_raw_transaction(signed.rawTransaction)
 print(f"Broadcast: {tx_hash.hex()}")
 
 print("Waiting for receipt...")
