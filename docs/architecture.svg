@@ -1,0 +1,177 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 520" width="1100" height="520" font-family="'Segoe UI', system-ui, sans-serif">
+
+  <!-- Background -->
+  <rect width="1100" height="520" fill="#0d1117" rx="12"/>
+
+  <!-- Title -->
+  <text x="550" y="38" text-anchor="middle" font-size="18" font-weight="700" fill="#e6edf3" letter-spacing="0.5">BlockCI/CD — System Architecture</text>
+  <text x="550" y="58" text-anchor="middle" font-size="11" fill="#8b949e">Decentralized Artifact Provenance for Zero-Trust Infrastructure Pipelines</text>
+
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <!-- WRITE PATH SWIMLANE -->
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <rect x="16" y="76" width="1068" height="180" fill="#161b22" rx="8" stroke="#30363d" stroke-width="1"/>
+  <rect x="16" y="76" width="130" height="180" fill="#1f2937" rx="8"/>
+  <text x="81" y="162" text-anchor="middle" font-size="11" font-weight="700" fill="#58a6ff" transform="rotate(-90,81,162)" letter-spacing="1">WRITE PATH</text>
+  <text x="81" y="178" text-anchor="middle" font-size="9" fill="#6e7681" transform="rotate(-90,81,178)">PROPOSE &amp; LOCK</text>
+
+  <!-- Step boxes: Write Path -->
+  <!-- 1: Open PR -->
+  <rect x="165" y="100" width="120" height="56" fill="#1e3a5f" rx="6" stroke="#388bfd" stroke-width="1.5"/>
+  <text x="225" y="122" text-anchor="middle" font-size="10" font-weight="600" fill="#79c0ff">Developer</text>
+  <text x="225" y="136" text-anchor="middle" font-size="10" fill="#e6edf3">Opens Pull Request</text>
+  <text x="225" y="149" text-anchor="middle" font-size="9" fill="#8b949e">to main branch</text>
+
+  <!-- Arrow -->
+  <line x1="285" y1="128" x2="310" y2="128" stroke="#388bfd" stroke-width="1.5" marker-end="url(#arrowBlue)"/>
+
+  <!-- 2: /tfplan -->
+  <rect x="310" y="100" width="120" height="56" fill="#1e3a5f" rx="6" stroke="#388bfd" stroke-width="1.5"/>
+  <text x="370" y="120" text-anchor="middle" font-size="10" font-weight="600" fill="#79c0ff">/tfplan</text>
+  <text x="370" y="134" text-anchor="middle" font-size="9" fill="#e6edf3">terraform plan</text>
+  <text x="370" y="147" text-anchor="middle" font-size="9" fill="#8b949e">SHA256 fingerprint</text>
+
+  <!-- Arrow -->
+  <line x1="430" y1="128" x2="455" y2="128" stroke="#388bfd" stroke-width="1.5" marker-end="url(#arrowBlue)"/>
+
+  <!-- 3: S3 Archive -->
+  <rect x="455" y="100" width="120" height="56" fill="#1a3a2a" rx="6" stroke="#3fb950" stroke-width="1.5"/>
+  <text x="515" y="120" text-anchor="middle" font-size="10" font-weight="600" fill="#56d364">S3 Archive</text>
+  <text x="515" y="134" text-anchor="middle" font-size="9" fill="#e6edf3">tfplan.binary + .json</text>
+  <text x="515" y="147" text-anchor="middle" font-size="9" fill="#8b949e">plans/pr-&lt;N&gt;.ref</text>
+
+  <!-- Arrow -->
+  <line x1="575" y1="128" x2="600" y2="128" stroke="#388bfd" stroke-width="1.5" marker-end="url(#arrowBlue)"/>
+
+  <!-- 4: /tfregister -->
+  <rect x="600" y="100" width="120" height="56" fill="#1e3a5f" rx="6" stroke="#388bfd" stroke-width="1.5"/>
+  <text x="660" y="120" text-anchor="middle" font-size="10" font-weight="600" fill="#79c0ff">/tfregister</text>
+  <text x="660" y="134" text-anchor="middle" font-size="9" fill="#e6edf3">anchor_hash.py</text>
+  <text x="660" y="147" text-anchor="middle" font-size="9" fill="#8b949e">sign + broadcast tx</text>
+
+  <!-- Arrow -->
+  <line x1="720" y1="128" x2="745" y2="128" stroke="#f0883e" stroke-width="1.5" marker-end="url(#arrowOrange)"/>
+
+  <!-- 5: Blockchain -->
+  <rect x="745" y="100" width="140" height="56" fill="#2d1f00" rx="6" stroke="#f0883e" stroke-width="1.5"/>
+  <text x="815" y="120" text-anchor="middle" font-size="10" font-weight="600" fill="#f0883e">Ethereum Sepolia</text>
+  <text x="815" y="134" text-anchor="middle" font-size="9" fill="#e6edf3">storeHash(bytes32)</text>
+  <text x="815" y="147" text-anchor="middle" font-size="9" fill="#8b949e">immutable on-chain record</text>
+
+  <!-- Lock icon area -->
+  <rect x="910" y="108" width="140" height="40" fill="#1c1c2e" rx="6" stroke="#8b5cf6" stroke-width="1.5" stroke-dasharray="4,2"/>
+  <text x="980" y="123" text-anchor="middle" font-size="9" fill="#a78bfa">Hash permanently</text>
+  <text x="980" y="136" text-anchor="middle" font-size="9" fill="#a78bfa">anchored on-chain ✓</text>
+
+  <!-- Write Path label on bottom -->
+  <text x="550" y="232" text-anchor="middle" font-size="9" fill="#3fb950">▲  Plan reviewed, fingerprinted, and locked to blockchain before merge is permitted</text>
+
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <!-- READ PATH SWIMLANE -->
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <rect x="16" y="272" width="1068" height="180" fill="#161b22" rx="8" stroke="#30363d" stroke-width="1"/>
+  <rect x="16" y="272" width="130" height="180" fill="#1f2937" rx="8"/>
+  <text x="81" y="358" text-anchor="middle" font-size="11" font-weight="700" fill="#f85149" transform="rotate(-90,81,358)" letter-spacing="1">READ PATH</text>
+  <text x="81" y="374" text-anchor="middle" font-size="9" fill="#6e7681" transform="rotate(-90,81,374)">VERIFY &amp; DEPLOY</text>
+
+  <!-- Step boxes: Read Path -->
+  <!-- 1: Merge to main -->
+  <rect x="165" y="296" width="120" height="56" fill="#3d1a1a" rx="6" stroke="#f85149" stroke-width="1.5"/>
+  <text x="225" y="316" text-anchor="middle" font-size="10" font-weight="600" fill="#ff7b72">Merge to main</text>
+  <text x="225" y="330" text-anchor="middle" font-size="9" fill="#e6edf3">deploy.yml triggers</text>
+  <text x="225" y="343" text-anchor="middle" font-size="9" fill="#8b949e">on push event</text>
+
+  <!-- Arrow -->
+  <line x1="285" y1="324" x2="310" y2="324" stroke="#f85149" stroke-width="1.5" marker-end="url(#arrowRed)"/>
+
+  <!-- 2: Resolve PR -->
+  <rect x="310" y="296" width="120" height="56" fill="#1e3a5f" rx="6" stroke="#388bfd" stroke-width="1.5"/>
+  <text x="370" y="314" text-anchor="middle" font-size="10" font-weight="600" fill="#79c0ff">Resolve PR#</text>
+  <text x="370" y="328" text-anchor="middle" font-size="9" fill="#e6edf3">gh api commits</text>
+  <text x="370" y="341" text-anchor="middle" font-size="9" fill="#8b949e">/sha/pulls lookup</text>
+
+  <!-- Arrow -->
+  <line x1="430" y1="324" x2="455" y2="324" stroke="#388bfd" stroke-width="1.5" marker-end="url(#arrowBlue)"/>
+
+  <!-- 3: Fetch from S3 -->
+  <rect x="455" y="296" width="120" height="56" fill="#1a3a2a" rx="6" stroke="#3fb950" stroke-width="1.5"/>
+  <text x="515" y="314" text-anchor="middle" font-size="10" font-weight="600" fill="#56d364">Fetch from S3</text>
+  <text x="515" y="328" text-anchor="middle" font-size="9" fill="#e6edf3">tfplan.binary + .json</text>
+  <text x="515" y="341" text-anchor="middle" font-size="9" fill="#8b949e">exact approved artifact</text>
+
+  <!-- Arrow -->
+  <line x1="575" y1="324" x2="600" y2="324" stroke="#388bfd" stroke-width="1.5" marker-end="url(#arrowBlue)"/>
+
+  <!-- 4: cast call -->
+  <rect x="600" y="296" width="120" height="56" fill="#2d1f00" rx="6" stroke="#f0883e" stroke-width="1.5"/>
+  <text x="660" y="314" text-anchor="middle" font-size="10" font-weight="600" fill="#f0883e">cast call</text>
+  <text x="660" y="328" text-anchor="middle" font-size="9" fill="#e6edf3">verifyHash(bytes32)</text>
+  <text x="660" y="341" text-anchor="middle" font-size="9" fill="#8b949e">Foundry eth_call</text>
+
+  <!-- Arrow: true path -->
+  <line x1="720" y1="316" x2="745" y2="316" stroke="#3fb950" stroke-width="2" marker-end="url(#arrowGreen)"/>
+  <text x="732" y="310" text-anchor="middle" font-size="8" fill="#56d364">true</text>
+
+  <!-- Arrow: false path (down) -->
+  <line x1="660" y1="352" x2="660" y2="420" stroke="#f85149" stroke-width="1.5" stroke-dasharray="4,2" marker-end="url(#arrowRed)"/>
+  <rect x="600" y="420" width="120" height="32" fill="#3d1a1a" rx="4" stroke="#f85149" stroke-width="1"/>
+  <text x="660" y="434" text-anchor="middle" font-size="9" font-weight="700" fill="#f85149">SECURITY FAILURE</text>
+  <text x="660" y="446" text-anchor="middle" font-size="8" fill="#8b949e">exit code 1 — blocked</text>
+  <text x="631" y="415" font-size="8" fill="#f85149">false</text>
+
+  <!-- 5: terraform apply -->
+  <rect x="745" y="296" width="140" height="56" fill="#1a3a2a" rx="6" stroke="#3fb950" stroke-width="2"/>
+  <text x="815" y="316" text-anchor="middle" font-size="10" font-weight="600" fill="#56d364">terraform apply</text>
+  <text x="815" y="330" text-anchor="middle" font-size="9" fill="#e6edf3">-auto-approve</text>
+  <text x="815" y="343" text-anchor="middle" font-size="9" fill="#8b949e">S3 binary — not regen</text>
+
+  <!-- 6: AWS -->
+  <rect x="910" y="296" width="140" height="56" fill="#1a3a2a" rx="6" stroke="#3fb950" stroke-width="1.5"/>
+  <line x1="885" y1="324" x2="910" y2="324" stroke="#3fb950" stroke-width="1.5" marker-end="url(#arrowGreen)"/>
+  <text x="980" y="316" text-anchor="middle" font-size="10" font-weight="600" fill="#56d364">AWS Deployed</text>
+  <text x="980" y="330" text-anchor="middle" font-size="9" fill="#e6edf3">S3 · SQS · SNS</text>
+  <text x="980" y="343" text-anchor="middle" font-size="9" fill="#8b949e">Lambda · IAM</text>
+
+  <!-- Read Path label on bottom -->
+  <text x="550" y="428" text-anchor="middle" font-size="9" fill="#f85149">▼  Any post-approval mutation fails blockchain check — deployment permanently blocked</text>
+
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <!-- VERTICAL CONNECTOR (blockchain shared between paths) -->
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <line x1="815" y1="156" x2="815" y2="196" stroke="#f0883e" stroke-width="1.5" stroke-dasharray="3,2"/>
+  <line x1="815" y1="196" x2="660" y2="196" stroke="#f0883e" stroke-width="1.5" stroke-dasharray="3,2"/>
+  <line x1="660" y1="196" x2="660" y2="272" stroke="#f0883e" stroke-width="1.5" stroke-dasharray="3,2" marker-end="url(#arrowOrange)"/>
+  <text x="745" y="191" text-anchor="middle" font-size="8" fill="#f0883e">same on-chain record</text>
+
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <!-- LEGEND -->
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <rect x="16" y="465" width="1068" height="44" fill="#161b22" rx="6" stroke="#30363d" stroke-width="1"/>
+  <rect x="30" y="478" width="12" height="12" fill="#1e3a5f" stroke="#388bfd" stroke-width="1.5" rx="2"/>
+  <text x="48" y="489" font-size="9" fill="#8b949e">GitHub Actions Step</text>
+  <rect x="170" y="478" width="12" height="12" fill="#1a3a2a" stroke="#3fb950" stroke-width="1.5" rx="2"/>
+  <text x="188" y="489" font-size="9" fill="#8b949e">AWS Resource</text>
+  <rect x="300" y="478" width="12" height="12" fill="#2d1f00" stroke="#f0883e" stroke-width="1.5" rx="2"/>
+  <text x="318" y="489" font-size="9" fill="#8b949e">Ethereum / Web3</text>
+  <rect x="440" y="478" width="12" height="12" fill="#1c1c2e" stroke="#8b5cf6" stroke-width="1.5" rx="2" stroke-dasharray="3,1"/>
+  <text x="458" y="489" font-size="9" fill="#8b949e">Immutable State</text>
+  <rect x="570" y="478" width="12" height="12" fill="#3d1a1a" stroke="#f85149" stroke-width="1.5" rx="2"/>
+  <text x="588" y="489" font-size="9" fill="#8b949e">Security Gate / Failure</text>
+  <text x="980" y="489" text-anchor="end" font-size="9" fill="#30363d">BlockCI/CD Architecture v1.0</text>
+
+  <!-- Arrow markers -->
+  <defs>
+    <marker id="arrowBlue" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L8,3 z" fill="#388bfd"/>
+    </marker>
+    <marker id="arrowGreen" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L8,3 z" fill="#3fb950"/>
+    </marker>
+    <marker id="arrowOrange" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L8,3 z" fill="#f0883e"/>
+    </marker>
+    <marker id="arrowRed" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L8,3 z" fill="#f85149"/>
+    </marker>
+  </defs>
+</svg>

@@ -2,6 +2,8 @@
 
 ### Decentralized Artifact Provenance for Zero-Trust Infrastructure Pipelines
 
+![BlockCI/CD Architecture Diagram](./docs/architecture.svg)
+
 ---
 
 ## Overview
