@@ -3,6 +3,10 @@ name: "Deploy"
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - "README.md"
+      - "docs/**"
+      - "*.md"
 
 env:
   AWS_REGION: "us-east-2"
