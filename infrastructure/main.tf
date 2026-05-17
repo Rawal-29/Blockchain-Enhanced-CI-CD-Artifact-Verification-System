@@ -67,3 +67,11 @@ resource "aws_s3_bucket" "native_web3_test_bucket" {
     E2E_Test_Status = "Whitelist_Passed"
   }
 }
+
+resource "aws_sqs_queue" "blockcicd_standard_queue" {
+  name = "blockcicd-standard-queue"
+
+  tags = {
+    Project = "BlockCICD"
+  }
+}
