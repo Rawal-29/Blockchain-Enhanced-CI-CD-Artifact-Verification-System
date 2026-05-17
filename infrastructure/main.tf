@@ -75,3 +75,11 @@ resource "aws_sqs_queue" "blockcicd_standard_queue" {
     Project = "BlockCICD"
   }
 }
+
+resource "aws_sns_topic" "blockcicd_standard_topic" {
+  name = "blockcicd-standard-topic"
+
+  tags = {
+    Project = "BlockCICD"
+  }
+}
