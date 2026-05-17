@@ -48,3 +48,12 @@ resource "aws_s3_bucket_policy" "public_read" {
   })
   depends_on = [aws_s3_bucket_public_access_block.block_public_read]
 }
+
+resource "aws_s3_bucket" "pipeline_test_bucket" {
+  bucket = "rawal-cicd-pipeline-test-2026"
+
+  tags = {
+    Environment = "Testing"
+    Pipeline    = "ChatOps-End-To-End"
+  }
+}
