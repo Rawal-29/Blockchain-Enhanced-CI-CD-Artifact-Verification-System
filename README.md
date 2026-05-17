@@ -2,7 +2,7 @@
 
 ### Decentralized Artifact Provenance for Zero-Trust Infrastructure Pipelines
 
-<img src="http://googleusercontent.com/image_generation_content/0" width="100%" alt="BlockCI/CD Architecture Diagram">
+![BlockCI/CD Architecture Diagram](./docs/architecture.png)
 
 ---
 
@@ -18,9 +18,9 @@ No trusted intermediary. No mutable audit log. No attack surface between review 
 
 ### 1. The Write Path — Propose & Lock
 
-A developer opens a Pull Request targeting `main`. A reviewer triggers the ChatOps pipeline by commenting directly on the PR:
+A developer opens a Pull Request targeting `main`. An authorized reviewer triggers the ChatOps pipeline by commenting directly on the PR:
 
-- **`/tfplan`** — The runner executes `terraform plan`, serializes the binary and JSON output, computes a deterministic SHA256 fingerprint, and archives all artifacts to an isolated S3 state bucket keyed by PR number. The plan hash is posted as a PR comment for audit visibility.
+- **`/tfplan`** — The runner executes `terraform plan`, serializes the output to both binary and JSON, computes a deterministic SHA256 fingerprint, and archives all artifacts to an isolated S3 state bucket keyed by PR number. The plan hash is posted as a PR comment for audit visibility.
 - **`/tfregister`** — The runner invokes `scripts/anchor_hash.py`, which constructs a raw `storeHash(bytes32)` transaction, signs it with the infrastructure wallet's private key, and broadcasts it to the `BlockCICD` smart contract on the Ethereum Sepolia testnet via `eth_sendRawTransaction`. The transaction hash and Etherscan verification link are posted back to the PR.
 
 At this point, the SHA256 of the approved plan is **permanently and immutably recorded on-chain**. It cannot be altered, deleted, or forged.
@@ -33,14 +33,13 @@ When the PR is merged into `main`, the `deploy.yml` pipeline triggers automatica
 2. Fetches the exact `tfplan.binary` and `tfplan.json` from S3 using the stored plan reference.
 3. Recomputes the SHA256 fingerprint of the downloaded plan.
 4. Calls `cast call` (Foundry) to invoke `verifyHash(bytes32)` on the on-chain registry.
-5. If the contract returns `true` → `terraform apply` proceeds.
-6. If the contract returns `false` → the pipeline exits with a `CRITICAL SECURITY FAILURE` and deployment is permanently blocked.
+5. `true` → `terraform apply` proceeds. `false` → `CRITICAL SECURITY FAILURE`, pipeline exits code 1.
 
-### 3. The Security Guarantee
+### 3. Core Security Guarantee — Eliminating TOCTOU
 
-This architecture eliminates **Time-of-Check to Time-of-Use (TOCTOU)** attacks — the class of vulnerability where infrastructure code is reviewed and approved, then silently modified between approval and execution. Because the gate re-derives the hash from the artifact and verifies it against an immutable on-chain record, no in-flight mutation can survive the verification step.
+This architecture permanently eliminates **Time-of-Check to Time-of-Use (TOCTOU)** attacks — the class of vulnerability where infrastructure code is reviewed and approved, then silently modified between approval and execution.
 
-The system enforces a **Zero-Trust deployment perimeter**: the blockchain is the sole authority. No human, no CI/CD runner, and no privileged process can bypass it without the cryptographic proof of prior approval.
+Because the deploy gate re-derives the hash from the exact artifact stored at review time and verifies it against an immutable on-chain record, **no in-flight mutation can survive the verification step**. The blockchain is the sole authority. No human, CI/CD runner, or privileged process can bypass it without the cryptographic proof of prior approval.
 
 ---
 
@@ -59,20 +58,20 @@ The system enforces a **Zero-Trust deployment perimeter**: the blockchain is the
 
 | Layer | Technology |
 |---|---|
-| Infrastructure | Terraform, AWS (S3, SQS, SNS, Lambda) |
-| Blockchain | Solidity 0.8.20, Ethereum Sepolia Testnet |
-| Web3 Client | Python `web3.py` |
-| On-Chain Verification | Foundry `cast call` |
-| CI/CD Orchestration | GitHub Actions (ChatOps + OIDC) |
-| State Backend | AWS S3 |
+| Infrastructure provisioning | Terraform, AWS (S3, SQS, SNS, Lambda) |
+| Blockchain registry | Solidity 0.8.20, Ethereum Sepolia Testnet |
+| Web3 transaction signing | Python `web3.py` |
+| On-chain verification | Foundry `cast call` |
+| CI/CD orchestration | GitHub Actions (ChatOps + OIDC) |
+| Remote state & plan storage | AWS S3 |
 
 ---
 
-## Prerequisites
+## System Requirements
 
 - AWS account with OIDC role configured for GitHub Actions
 - Ethereum Sepolia RPC endpoint (Alchemy or Infura)
-- Deployed `BlockCICD.sol` contract address
+- Deployed `BlockCICD.sol` contract address on Sepolia
 - GitHub repository secrets: `ETHEREUM_RPC_URL`, `DEPLOYER_PRIVATE_KEY`, `CONTRACT_ADDRESS`, `AWS_ROLE_ARN`
 
 ---
