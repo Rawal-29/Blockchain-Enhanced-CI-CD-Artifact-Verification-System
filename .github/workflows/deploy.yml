@@ -1,0 +1,82 @@
+name: "Deploy"
+
+on:
+  push:
+    branches: [main]
+
+env:
+  AWS_REGION: "us-east-2"
+  TF_STATE_BUCKET: "rawal-cicd-terraform-state-2026"
+  TF_WORKING_DIR: "./infrastructure"
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy:
+    name: "Web3-Verified Terraform Deploy"
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+
+      - name: Terraform Init
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: terraform init
+
+      - name: Create Execution Plan
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: |
+          terraform plan -out=tfplan.binary
+          terraform show -json tfplan.binary > tfplan.json
+
+      - name: Calculate Plan Hash
+        id: hash
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: |
+          ARTIFACT_HASH=$(sha256sum tfplan.json | awk '{print $1}')
+          echo "artifact_hash=$ARTIFACT_HASH" >> "$GITHUB_OUTPUT"
+          echo "Plan hash: $ARTIFACT_HASH"
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+
+      - name: Verify Plan Hash on Blockchain
+        id: verify
+        env:
+          ETHEREUM_RPC_URL: ${{ secrets.ETHEREUM_RPC_URL }}
+          CONTRACT_ADDRESS: ${{ secrets.CONTRACT_ADDRESS }}
+          ARTIFACT_HASH: ${{ steps.hash.outputs.artifact_hash }}
+        run: |
+          echo "Querying BlockCICD contract on Sepolia..."
+          echo "Contract: ${CONTRACT_ADDRESS}"
+          echo "Hash:     ${ARTIFACT_HASH}"
+          RESULT=$(cast call "${CONTRACT_ADDRESS}" \
+            "verifyHash(bytes32)(bool)" \
+            "0x${ARTIFACT_HASH}" \
+            --rpc-url "${ETHEREUM_RPC_URL}")
+          echo "On-chain result: ${RESULT}"
+          if [ "${RESULT}" = "true" ]; then
+            echo "SECURITY CHECK PASSED: Plan hash verified on Sepolia."
+          else
+            echo "CRITICAL SECURITY FAILURE: Plan hash not found on blockchain."
+            echo "This plan was not approved via /tfregister. Aborting deployment."
+            exit 1
+          fi
+
+      - name: Terraform Apply
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: terraform apply -auto-approve tfplan.binary
